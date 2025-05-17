@@ -16,12 +16,24 @@
                 <div class="user-icon">
                     <i class="fas fa-user-circle"></i>
                     <div class="user-menu">
+                        <div class="menu-item history-btn" id="history-btn">
+                            <i class="fas fa-history"></i> Revenue History
+                        </div>
                         <div class="menu-item logout-btn" id="logout-btn">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Today's Revenue Card -->
+        <div class="revenue-card">
+            <div class="revenue-title">
+                <i class="fas fa-chart-line"></i>
+                <span>Today's Revenue</span>
+            </div>
+            <div class="revenue-amount" id="today-revenue">₹ 0</div>
         </div>
 
         <div class="transaction-table">
@@ -76,6 +88,42 @@
                 <div class="modal-footer">
                     <button class="cancel-btn" id="cancel-transaction">Cancel</button>
                     <button class="save-btn" id="save-transaction">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Revenue History -->
+        <div class="modal" id="history-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Revenue History</h2>
+                    <span class="close" id="close-history-modal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="history-filters">
+                        <div class="form-group">
+                            <label for="history-month">Month</label>
+                            <select id="history-month">
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="history-year">Year</label>
+                            <select id="history-year">
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="history-table">
+                        <div class="history-header">
+                            <div class="history-column date">Date</div>
+                            <div class="history-column customers">Customers</div>
+                            <div class="history-column revenue">Revenue</div>
+                        </div>
+                        <div class="history-body" id="history-body">
+                            <!-- History rows will be added dynamically -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

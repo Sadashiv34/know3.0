@@ -37,6 +37,38 @@ body {
     color: #333;
 }
 
+/* Revenue Card Styles */
+.revenue-card {
+    background-color: #f8f9fa;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.revenue-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #555;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.revenue-title i {
+    color: #1a73e8;
+}
+
+.revenue-amount {
+    font-size: 24px;
+    font-weight: 600;
+    color: #388e3c;
+}
+
 .user-profile {
     display: flex;
     align-items: center;
@@ -232,6 +264,87 @@ body {
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* History Modal Styles */
+#history-modal .modal-content {
+    max-width: 600px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#history-modal .modal-body {
+    overflow-y: auto;
+    max-height: calc(80vh - 120px);
+}
+
+.history-filters {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.history-filters .form-group {
+    flex: 1;
+}
+
+.history-table {
+    width: 100%;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.history-header {
+    display: flex;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+}
+
+.history-column {
+    padding: 12px 15px;
+    text-align: left;
+}
+
+.history-column.date {
+    flex: 1.5;
+}
+
+.history-column.customers {
+    flex: 1;
+    text-align: center;
+}
+
+.history-column.revenue {
+    flex: 1;
+    text-align: right;
+}
+
+.history-row {
+    display: flex;
+    border-bottom: 1px solid #eee;
+    align-items: center;
+}
+
+.history-row:last-child {
+    border-bottom: none;
+}
+
+.history-row .history-column {
+    padding: 15px;
+}
+
+.history-row.today {
+    background-color: #e8f5e9;
+}
+
+.history-row.empty {
+    padding: 30px 0;
+    color: #666;
+    font-style: italic;
+    text-align: center;
 }
 
 .modal-header {
