@@ -21,6 +21,33 @@ A simple web application for tracking transactions with user authentication and 
 2. Open `index.html` in your browser
 3. Create an account or log in with existing credentials
 
-## Deployment
+## Deployment Instructions
 
-This application is deployed on Vercel.
+### Deploying to Vercel
+
+1. Make sure you have the Vercel CLI installed:
+   ```
+   npm install -g vercel
+   ```
+
+2. Login to Vercel:
+   ```
+   vercel login
+   ```
+
+3. Deploy the application:
+   ```
+   vercel
+   ```
+
+4. For production deployment:
+   ```
+   vercel --prod
+   ```
+
+### Important Notes for Deployment
+
+- Make sure your `vercel.json` file is properly configured
+- This application is a static site and does not use server-side PHP
+- All data is stored in Firebase Firestore
+- The application uses client-side JavaScript for all functionality
