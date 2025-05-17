@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction History</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>History</h1>
+            <div class="user-profile">
+                <span class="username" id="username-display"></span>
+                <div class="user-icon">
+                    <i class="fas fa-user-circle"></i>
+                    <div class="user-menu">
+                        <div class="menu-item logout-btn" id="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="transaction-table">
+            <div class="table-header">
+                <div class="column name">Name</div>
+                <div class="column time">Time</div>
+                <div class="column amount">Amount</div>
+                <div class="column status">Status</div>
+            </div>
+
+            <div class="table-body">
+                <!-- Transaction rows will be added dynamically -->
+            </div>
+        </div>
+
+        <!-- Add Button -->
+        <button class="add-button" id="add-button">
+            <i class="fas fa-plus"></i>
+        </button>
+
+        <!-- Modal for adding new transactions -->
+        <div class="modal" id="transaction-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Add New Transaction</h2>
+                    <span class="close" id="close-transaction-modal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" placeholder="Enter name">
+                    </div>
+                    <div class="form-group">
+                        <label for="duration">Duration</label>
+                        <input type="number" id="duration" placeholder="Enter duration">
+                    </div>
+                    <div class="form-group">
+                        <label for="amount">Amount</label>
+                        <div class="amount-input">
+                            <span class="currency">₹</span>
+                            <input type="number" id="amount" placeholder="Enter amount">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="status">Status</label>
+                        <select id="status">
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="cancel-btn" id="cancel-transaction">Cancel</button>
+                    <button class="save-btn" id="save-transaction">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <!-- Application Script -->
+    <script src="script.js"></script>
+</body>
+</html>
