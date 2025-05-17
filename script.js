@@ -133,7 +133,7 @@ function saveTransactionData() {
 
     // Validate form
     if (!name || !amount) {
-        alert('Please fill in all required fields');
+        showMessage('Please fill in all required fields', 'error');
         return;
     }
 
@@ -144,7 +144,7 @@ function saveTransactionData() {
     // Create new transaction object
     const newTransaction = {
         name: name,
-        time: duration ? `${duration}m` : '0s',
+        time: duration ? `${duration}h` : '0h',
         amount: parseFloat(amount),
         status: status,
         userId: currentUser.id,
@@ -152,67 +152,94 @@ function saveTransactionData() {
     };
 
     // Save to Firebase
-    rentalCollection.add(newTransaction)
-        .then(docRef => {
-            // Add to UI with the document ID
-            const transactionWithId = {
-                id: docRef.id,
-                ...newTransaction,
-                warning: false // Add warning flag for UI
-            };
+    try {
+        rentalCollection.add(newTransaction)
+            .then(docRef => {
+                try {
+                    // Add to UI with the document ID
+                    const transactionWithId = {
+                        id: docRef.id,
+                        ...newTransaction,
+                        warning: false // Add warning flag for UI
+                    };
 
-            addTransactionToUI(transactionWithId);
+                    addTransactionToUI(transactionWithId);
 
-            // Close modal
-            closeModal();
+                    // Close modal
+                    closeModal('transaction-modal');
 
-            // Reset form
-            document.getElementById('name').value = '';
-            document.getElementById('duration').value = '';
-            document.getElementById('amount').value = '';
-            document.getElementById('status').value = 'pending';
+                    // Reset form
+                    document.getElementById('name').value = '';
+                    document.getElementById('duration').value = '';
+                    document.getElementById('amount').value = '';
+                    document.getElementById('status').value = 'pending';
 
-            // Re-enable save button
-            saveTransaction.disabled = false;
-            saveTransaction.textContent = 'Save';
+                    // Re-enable save button
+                    saveTransaction.disabled = false;
+                    saveTransaction.textContent = 'Save';
 
-            // Show success message
-            showMessage('Transaction added successfully', 'success');
+                    // Show success message
+                    showMessage('Transaction added successfully', 'success');
 
-            // If the new transaction is from today and is paid, update the revenue display
-            if (isToday(newTransaction.createdAt) && newTransaction.status === 'paid') {
-                // Get the current revenue amount
-                const currentRevenue = parseFloat(todayRevenueDisplay.textContent.replace('₹', '').trim());
-                // Add the new transaction amount
-                const newRevenue = currentRevenue + newTransaction.amount;
-                // Update the display
-                updateRevenueDisplay(newRevenue);
+                    // If the new transaction is from today and is paid, update the revenue display
+                    if (isToday(newTransaction.createdAt) && newTransaction.status === 'paid') {
+                        try {
+                            // Get the current revenue amount
+                            const currentRevenue = parseFloat(todayRevenueDisplay.textContent.replace('₹', '').trim());
+                            // Add the new transaction amount
+                            const newRevenue = currentRevenue + newTransaction.amount;
+                            // Update the display
+                            updateRevenueDisplay(newRevenue);
 
-                // Also update the revenue history
-                rentalCollection.where('userId', '==', currentUser.id)
-                    .get()
-                    .then(snapshot => {
-                        const transactions = [];
-                        snapshot.forEach(doc => {
-                            transactions.push({
-                                id: doc.id,
-                                ...doc.data()
-                            });
-                        });
+                            // Also update the revenue history
+                            rentalCollection.where('userId', '==', currentUser.id)
+                                .get()
+                                .then(snapshot => {
+                                    const transactions = [];
+                                    snapshot.forEach(doc => {
+                                        transactions.push({
+                                            id: doc.id,
+                                            ...doc.data()
+                                        });
+                                    });
 
-                        // Update today's history record
-                        updateTodayRevenueHistory(transactions);
-                    });
-            }
-        })
-        .catch(error => {
-            console.error('Error adding transaction:', error);
-            alert('Error adding transaction. Please try again.');
+                                    // Update today's history record
+                                    updateTodayRevenueHistory(transactions);
+                                })
+                                .catch(error => {
+                                    console.error('Error updating revenue history:', error);
+                                    // Don't show alert to user for this non-critical error
+                                });
+                        } catch (innerError) {
+                            console.error('Error updating revenue display:', innerError);
+                            // Don't show alert to user for this non-critical error
+                        }
+                    }
+                } catch (uiError) {
+                    console.error('Error updating UI:', uiError);
+                    showMessage('Transaction saved but UI update failed', 'error');
 
-            // Re-enable save button
-            saveTransaction.disabled = false;
-            saveTransaction.textContent = 'Save';
-        });
+                    // Re-enable save button
+                    saveTransaction.disabled = false;
+                    saveTransaction.textContent = 'Save';
+                }
+            })
+            .catch(error => {
+                console.error('Error adding transaction:', error);
+                showMessage('Error adding transaction. Please try again.', 'error');
+
+                // Re-enable save button
+                saveTransaction.disabled = false;
+                saveTransaction.textContent = 'Save';
+            });
+    } catch (outerError) {
+        console.error('Critical error in transaction save:', outerError);
+        showMessage('Error adding transaction. Please try again.', 'error');
+
+        // Re-enable save button
+        saveTransaction.disabled = false;
+        saveTransaction.textContent = 'Save';
+    }
 }
 
 function addTransactionToUI(transaction) {
@@ -223,8 +250,8 @@ function addTransactionToUI(transaction) {
     row.innerHTML = `
         <div class="column name">${transaction.name}</div>
         <div class="column time">
-            ${transaction.warning ? '<i class="fas fa-exclamation-triangle warning-icon"></i>' : ''}
-            ${transaction.time}
+            ${transaction.warning ? '<i class="fas fa-exclamation-triangle warning-icon"></i>' : '<i class="far fa-clock time-icon"></i>'}
+            ${formatDuration(transaction.time)}
         </div>
         <div class="column amount">₹ ${transaction.amount}</div>
         <div class="column status">
@@ -243,64 +270,112 @@ function addTransactionToUI(transaction) {
 function toggleStatus(id) {
     // Check if user is logged in
     if (!currentUser) {
-        alert('Please log in to update transaction status');
-        window.location.href = 'login.html';
+        showMessage('Please log in to update transaction status', 'error');
+        setTimeout(() => {
+            window.location.href = 'login.html';
+        }, 2000);
         return;
     }
 
-    const row = document.querySelector(`.table-row[data-id="${id}"]`);
-    const statusBadge = row.querySelector('.status-badge');
-    const currentStatus = statusBadge.classList.contains('paid') ? 'paid' : 'pending';
-    const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+    try {
+        const row = document.querySelector(`.table-row[data-id="${id}"]`);
+        if (!row) {
+            showMessage('Transaction not found', 'error');
+            return;
+        }
 
-    // Get the transaction data to check if it's from today
-    rentalCollection.doc(id).get()
-        .then(doc => {
-            if (doc.exists) {
-                const transaction = doc.data();
+        const statusBadge = row.querySelector('.status-badge');
+        const currentStatus = statusBadge.classList.contains('paid') ? 'paid' : 'pending';
+        const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
 
-                // Update in Firebase
-                return rentalCollection.doc(id).update({
-                    status: newStatus
-                }).then(() => {
-                    // Update UI
-                    statusBadge.classList.remove(currentStatus);
-                    statusBadge.classList.add(newStatus);
-                    statusBadge.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+        // Disable the status badge temporarily
+        statusBadge.style.pointerEvents = 'none';
+        statusBadge.style.opacity = '0.7';
 
-                    // Show success message
-                    showMessage('Status updated successfully', 'success');
+        // Get the transaction data to check if it's from today
+        rentalCollection.doc(id).get()
+            .then(doc => {
+                if (doc.exists) {
+                    const transaction = doc.data();
 
-                    // If the transaction is from today, update the revenue display
-                    if (isToday(transaction.createdAt)) {
-                        // Recalculate today's revenue by loading all transactions again
-                        // This ensures we have the most up-to-date data
-                        rentalCollection.where('userId', '==', currentUser.id)
-                            .get()
-                            .then(snapshot => {
-                                const transactions = [];
-                                snapshot.forEach(doc => {
-                                    transactions.push({
-                                        id: doc.id,
-                                        ...doc.data()
-                                    });
-                                });
+                    // Update in Firebase
+                    return rentalCollection.doc(id).update({
+                        status: newStatus
+                    }).then(() => {
+                        try {
+                            // Update UI
+                            statusBadge.classList.remove(currentStatus);
+                            statusBadge.classList.add(newStatus);
+                            statusBadge.textContent = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
 
-                                // Calculate and update today's revenue
-                                const todayRevenue = calculateTodayRevenue(transactions);
-                                updateRevenueDisplay(todayRevenue);
+                            // Re-enable the status badge
+                            statusBadge.style.pointerEvents = 'auto';
+                            statusBadge.style.opacity = '1';
 
-                                // Update revenue history for today
-                                updateTodayRevenueHistory(transactions);
-                            });
-                    }
-                });
-            }
-        })
-        .catch(error => {
-            console.error('Error updating status:', error);
-            alert('Error updating status. Please try again.');
-        });
+                            // Show success message
+                            showMessage('Status updated successfully', 'success');
+
+                            // If the transaction is from today, update the revenue display
+                            if (isToday(transaction.createdAt)) {
+                                try {
+                                    // Recalculate today's revenue by loading all transactions again
+                                    // This ensures we have the most up-to-date data
+                                    rentalCollection.where('userId', '==', currentUser.id)
+                                        .get()
+                                        .then(snapshot => {
+                                            const transactions = [];
+                                            snapshot.forEach(doc => {
+                                                transactions.push({
+                                                    id: doc.id,
+                                                    ...doc.data()
+                                                });
+                                            });
+
+                                            // Calculate and update today's revenue
+                                            const todayRevenue = calculateTodayRevenue(transactions);
+                                            updateRevenueDisplay(todayRevenue);
+
+                                            // Update revenue history for today
+                                            updateTodayRevenueHistory(transactions);
+                                        })
+                                        .catch(error => {
+                                            console.error('Error recalculating revenue:', error);
+                                            // Don't show error to user for this non-critical operation
+                                        });
+                                } catch (revenueError) {
+                                    console.error('Error updating revenue display:', revenueError);
+                                }
+                            }
+                        } catch (uiError) {
+                            console.error('Error updating UI after status change:', uiError);
+                            showMessage('Status updated but UI refresh failed', 'error');
+
+                            // Re-enable the status badge
+                            statusBadge.style.pointerEvents = 'auto';
+                            statusBadge.style.opacity = '1';
+                        }
+                    });
+                } else {
+                    // Document doesn't exist
+                    showMessage('Transaction not found in database', 'error');
+
+                    // Re-enable the status badge
+                    statusBadge.style.pointerEvents = 'auto';
+                    statusBadge.style.opacity = '1';
+                }
+            })
+            .catch(error => {
+                console.error('Error updating status:', error);
+                showMessage('Error updating status. Please try again.', 'error');
+
+                // Re-enable the status badge
+                statusBadge.style.pointerEvents = 'auto';
+                statusBadge.style.opacity = '1';
+            });
+    } catch (error) {
+        console.error('Critical error in toggleStatus:', error);
+        showMessage('Error updating status. Please try again.', 'error');
+    }
 }
 
 function logout() {
@@ -319,7 +394,28 @@ function logout() {
 
 function toggleUserMenu() {
     const userMenu = document.querySelector('.user-menu');
-    userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+
+    // For mobile devices, use classList to toggle the 'show' class
+    if (window.innerWidth <= 600) {
+        userMenu.classList.toggle('show');
+    } else {
+        // For desktop, use the style.display property
+        userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // Close menu when clicking outside
+    const closeMenuOnClickOutside = (event) => {
+        if (!event.target.closest('.user-icon')) {
+            userMenu.classList.remove('show');
+            userMenu.style.display = 'none';
+            document.removeEventListener('click', closeMenuOnClickOutside);
+        }
+    };
+
+    // Add the event listener with a slight delay to prevent immediate closing
+    setTimeout(() => {
+        document.addEventListener('click', closeMenuOnClickOutside);
+    }, 100);
 }
 
 function checkAuthState() {
@@ -401,6 +497,30 @@ function calculateTodayRevenue(transactions) {
 // Function to update the revenue display
 function updateRevenueDisplay(amount) {
     todayRevenueDisplay.textContent = `₹ ${amount.toFixed(2)}`;
+}
+
+// Function to format duration display
+function formatDuration(durationStr) {
+    // If the duration is already in the new format, return it
+    if (durationStr.includes('h')) {
+        return durationStr;
+    }
+
+    // Handle old format (for backward compatibility)
+    if (durationStr.includes('m')) {
+        // Convert minutes to hours
+        const minutes = parseFloat(durationStr.replace('m', ''));
+        const hours = (minutes / 60).toFixed(1);
+        return `${hours}h`;
+    }
+
+    // Handle seconds format
+    if (durationStr.includes('s')) {
+        return '0h';
+    }
+
+    // Default case
+    return durationStr;
 }
 
 // Function to load history data
@@ -567,7 +687,7 @@ function loadTransactions() {
                 const transaction = {
                     id: doc.id,
                     ...doc.data(),
-                    warning: doc.data().time && doc.data().time.includes('13m 38s') // Add warning flag for specific time
+                    warning: false // No longer using warning flag for specific time
                 };
 
                 transactions.push(transaction);
@@ -594,19 +714,91 @@ function loadTransactions() {
         });
 }
 
+// Keep track of active messages
+let activeMessages = [];
+let messageCounter = 0;
+
 function showMessage(message, type) {
+    // Create a unique ID for this message
+    const messageId = `message-${messageCounter++}`;
+
+    // Create message element
     const messageElement = document.createElement('div');
     messageElement.className = `message ${type}`;
+    messageElement.id = messageId;
     messageElement.textContent = message;
+
+    // Add close button
+    const closeButton = document.createElement('span');
+    closeButton.innerHTML = '&times;';
+    closeButton.className = 'message-close';
+    closeButton.addEventListener('click', () => {
+        removeMessage(messageId);
+    });
+
+    messageElement.appendChild(closeButton);
+
+    // Add to active messages
+    activeMessages.push({
+        id: messageId,
+        element: messageElement,
+        timer: null
+    });
+
+    // Position messages from bottom to top
+    positionMessages();
+
+    // Add to DOM
     document.body.appendChild(messageElement);
 
     // Auto-remove after 3 seconds
-    setTimeout(() => {
-        messageElement.classList.add('hide');
-        setTimeout(() => {
-            messageElement.remove();
-        }, 300);
+    const timer = setTimeout(() => {
+        removeMessage(messageId);
     }, 3000);
+
+    // Update the timer in our active messages array
+    const messageObj = activeMessages.find(m => m.id === messageId);
+    if (messageObj) {
+        messageObj.timer = timer;
+    }
+}
+
+function removeMessage(messageId) {
+    const index = activeMessages.findIndex(m => m.id === messageId);
+    if (index !== -1) {
+        const messageObj = activeMessages[index];
+
+        // Clear the timeout if it exists
+        if (messageObj.timer) {
+            clearTimeout(messageObj.timer);
+        }
+
+        // Add hide class for animation
+        messageObj.element.classList.add('hide');
+
+        // Remove from DOM after animation
+        setTimeout(() => {
+            if (messageObj.element.parentNode) {
+                messageObj.element.remove();
+            }
+
+            // Remove from active messages array
+            activeMessages.splice(index, 1);
+
+            // Reposition remaining messages
+            positionMessages();
+        }, 300);
+    }
+}
+
+function positionMessages() {
+    // Position messages from bottom to top with 10px gap
+    let bottomOffset = 20;
+
+    activeMessages.forEach(messageObj => {
+        messageObj.element.style.bottom = `${bottomOffset}px`;
+        bottomOffset += messageObj.element.offsetHeight + 10;
+    });
 }
 
 // Function to set up midnight check for daily history update
