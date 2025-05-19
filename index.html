@@ -19,6 +19,9 @@
                         <div class="menu-item history-btn" id="history-btn">
                             <i class="fas fa-history"></i> Revenue History
                         </div>
+                        <div class="menu-item calendar-toggle" id="calendar-toggle">
+                            <i class="far fa-calendar-alt"></i> <span id="calendar-toggle-text">Enable Calendar</span>
+                        </div>
                         <div class="menu-item logout-btn" id="logout-btn">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </div>
@@ -66,9 +69,24 @@
                         <label for="name">Name</label>
                         <input type="text" id="name" placeholder="Enter name">
                     </div>
-                    <div class="form-group">
+                    <!-- Duration input (hours mode) -->
+                    <div class="form-group" id="hours-input-group">
                         <label for="duration">Duration (hours)</label>
                         <input type="number" id="duration" placeholder="Enter duration in hours" step="0.5" min="0">
+                    </div>
+
+                    <!-- Date range inputs (calendar mode) -->
+                    <div class="form-group date-range-group" id="date-range-group" style="display: none;">
+                        <label for="start-date">Start Date</label>
+                        <input type="date" id="start-date">
+                    </div>
+                    <div class="form-group date-range-group" id="end-date-group" style="display: none;">
+                        <label for="end-date">End Date</label>
+                        <input type="date" id="end-date">
+                    </div>
+                    <div class="form-group date-range-group" id="calculated-duration-group" style="display: none;">
+                        <label>Calculated Duration</label>
+                        <div id="calculated-duration" class="calculated-value">0 days</div>
                     </div>
                     <div class="form-group">
                         <label for="amount">Amount</label>

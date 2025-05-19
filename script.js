@@ -37,6 +37,8 @@ const cancelTransaction = document.getElementById('cancel-transaction');
 const saveTransaction = document.getElementById('save-transaction');
 const logoutButton = document.getElementById('logout-btn');
 const historyButton = document.getElementById('history-btn');
+const calendarToggle = document.getElementById('calendar-toggle');
+const calendarToggleText = document.getElementById('calendar-toggle-text');
 const userIcon = document.querySelector('.user-icon');
 const tableBody = document.querySelector('.table-body');
 const usernameDisplay = document.getElementById('username-display');
@@ -47,17 +49,64 @@ const historyBody = document.getElementById('history-body');
 const historyMonthSelect = document.getElementById('history-month');
 const historyYearSelect = document.getElementById('history-year');
 
+// Calendar mode elements
+const hoursInputGroup = document.getElementById('hours-input-group');
+const dateRangeGroup = document.getElementById('date-range-group');
+const endDateGroup = document.getElementById('end-date-group');
+const calculatedDurationGroup = document.getElementById('calculated-duration-group');
+const startDateInput = document.getElementById('start-date');
+const endDateInput = document.getElementById('end-date');
+const calculatedDuration = document.getElementById('calculated-duration');
+
 // Event Listeners
 addButton.addEventListener('click', openTransactionModal);
 closeTransactionModal.addEventListener('click', () => closeModal('transaction-modal'));
 cancelTransaction.addEventListener('click', () => closeModal('transaction-modal'));
 saveTransaction.addEventListener('click', saveTransactionData);
-logoutButton.addEventListener('click', logout);
-historyButton.addEventListener('click', openHistoryModal);
 closeHistoryModal.addEventListener('click', () => closeModal('history-modal'));
+
+// Add direct event listeners for menu items
+const directHistoryButton = document.getElementById('history-btn');
+if (directHistoryButton) {
+    directHistoryButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        openHistoryModal();
+        console.log('History button clicked');
+    });
+}
+
+const directLogoutButton = document.getElementById('logout-btn');
+if (directLogoutButton) {
+    directLogoutButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        logout();
+        console.log('Logout button clicked');
+    });
+}
+
+const directCalendarToggle = document.getElementById('calendar-toggle');
+if (directCalendarToggle) {
+    directCalendarToggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleCalendarMode();
+        console.log('Calendar toggle clicked');
+    });
+}
+
+// Add both click and touchstart events for better mobile support
 userIcon.addEventListener('click', toggleUserMenu);
+userIcon.addEventListener('touchstart', function(e) {
+    e.preventDefault(); // Prevent default touch behavior
+    toggleUserMenu(e);
+}, { passive: false });
+
 historyMonthSelect.addEventListener('change', loadHistoryData);
 historyYearSelect.addEventListener('change', loadHistoryData);
+startDateInput.addEventListener('change', calculateDateDuration);
+endDateInput.addEventListener('change', calculateDateDuration);
+
+// Calendar mode state
+let calendarModeEnabled = false;
 
 // Check if user is logged in
 checkAuthState();
@@ -65,12 +114,324 @@ checkAuthState();
 // Set up midnight check for daily history update
 setupMidnightCheck();
 
+// Load calendar mode preference
+loadCalendarModePreference();
+
+// Check for approaching due dates
+checkDueDates();
+
+// Request notification permission
+requestNotificationPermission();
+
+// Initialize menu event listeners
+document.addEventListener('DOMContentLoaded', initializeMenuEventListeners);
+
+// Function to initialize menu event listeners
+function initializeMenuEventListeners() {
+    console.log('Initializing menu event listeners');
+
+    // Function to close the menu
+    function closeMenu() {
+        const userMenu = document.querySelector('.user-menu');
+        const menuBackdrop = document.getElementById('menu-backdrop');
+
+        if (userMenu && userMenu.classList.contains('show')) {
+            userMenu.classList.remove('show');
+            if (menuBackdrop && menuBackdrop.parentNode) {
+                document.body.removeChild(menuBackdrop);
+            }
+        }
+    }
+
+    // Add direct event listeners for menu items without replacing elements
+    // Handle history button click
+    const historyBtn = document.getElementById('history-btn');
+    if (historyBtn) {
+        console.log('Adding event listeners to history button');
+
+        // Clear existing listeners by cloning and replacing
+        const parent = historyBtn.parentNode;
+        const clone = historyBtn.cloneNode(true);
+        parent.replaceChild(clone, historyBtn);
+
+        // Add new listeners to the clone
+        clone.addEventListener('click', function(e) {
+            console.log('History button clicked');
+            e.stopPropagation();
+            closeMenu();
+            openHistoryModal();
+        });
+
+        clone.addEventListener('touchstart', function(e) {
+            console.log('History button touched');
+            e.preventDefault();
+            e.stopPropagation();
+            closeMenu();
+            openHistoryModal();
+        }, { passive: false });
+    }
+
+    // Handle calendar toggle button click
+    const calToggle = document.getElementById('calendar-toggle');
+    if (calToggle) {
+        console.log('Adding event listeners to calendar toggle');
+
+        // Clear existing listeners by cloning and replacing
+        const parent = calToggle.parentNode;
+        const clone = calToggle.cloneNode(true);
+        parent.replaceChild(clone, calToggle);
+
+        // Add new listeners to the clone
+        clone.addEventListener('click', function(e) {
+            console.log('Calendar toggle clicked');
+            e.stopPropagation();
+            closeMenu();
+            toggleCalendarMode();
+        });
+
+        clone.addEventListener('touchstart', function(e) {
+            console.log('Calendar toggle touched');
+            e.preventDefault();
+            e.stopPropagation();
+            closeMenu();
+            toggleCalendarMode();
+        }, { passive: false });
+    }
+
+    // Handle logout button click
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        console.log('Adding event listeners to logout button');
+
+        // Clear existing listeners by cloning and replacing
+        const parent = logoutBtn.parentNode;
+        const clone = logoutBtn.cloneNode(true);
+        parent.replaceChild(clone, logoutBtn);
+
+        // Add new listeners to the clone
+        clone.addEventListener('click', function(e) {
+            console.log('Logout button clicked');
+            e.stopPropagation();
+            closeMenu();
+            logout();
+        });
+
+        clone.addEventListener('touchstart', function(e) {
+            console.log('Logout button touched');
+            e.preventDefault();
+            e.stopPropagation();
+            closeMenu();
+            logout();
+        }, { passive: false });
+    }
+}
+
+// Function to toggle calendar mode
+function toggleCalendarMode() {
+    console.log('Toggle calendar mode called, current state:', calendarModeEnabled);
+    calendarModeEnabled = !calendarModeEnabled;
+    console.log('New calendar mode state:', calendarModeEnabled);
+
+    // Update UI
+    updateCalendarModeUI();
+
+    // Save preference to user settings
+    if (currentUser) {
+        try {
+            userCollection.doc(currentUser.id).update({
+                calendarModeEnabled: calendarModeEnabled
+            }).then(() => {
+                console.log('Calendar mode preference saved successfully');
+            }).catch(error => {
+                console.error('Error saving calendar mode preference:', error);
+            });
+        } catch (error) {
+            console.error('Error in toggleCalendarMode:', error);
+        }
+    }
+}
+
+// Function to update UI based on calendar mode
+function updateCalendarModeUI() {
+    console.log('Updating calendar mode UI');
+
+    // Get fresh references to all elements
+    const calToggleText = document.getElementById('calendar-toggle-text');
+    const calToggle = document.getElementById('calendar-toggle');
+    const hoursGroup = document.getElementById('hours-input-group');
+    const dateRange = document.getElementById('date-range-group');
+    const endDate = document.getElementById('end-date-group');
+    const calcDuration = document.getElementById('calculated-duration-group');
+    const startDate = document.getElementById('start-date');
+    const endDateInput = document.getElementById('end-date');
+
+    console.log('Elements found:', {
+        calToggleText: !!calToggleText,
+        calToggle: !!calToggle,
+        hoursGroup: !!hoursGroup,
+        dateRange: !!dateRange,
+        endDate: !!endDate,
+        calcDuration: !!calcDuration,
+        startDate: !!startDate,
+        endDateInput: !!endDateInput
+    });
+
+    if (calendarModeEnabled) {
+        // Update toggle button
+        if (calToggleText) calToggleText.textContent = 'Disable Calendar';
+        if (calToggle) calToggle.classList.add('active');
+
+        // Update form fields
+        if (hoursGroup) hoursGroup.style.display = 'none';
+        if (dateRange) dateRange.style.display = 'block';
+        if (endDate) endDate.style.display = 'block';
+        if (calcDuration) calcDuration.style.display = 'block';
+
+        // Set default dates if empty
+        if (startDate && !startDate.value) {
+            startDate.valueAsDate = new Date();
+        }
+        if (endDateInput && !endDateInput.value) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            endDateInput.valueAsDate = tomorrow;
+        }
+
+        // Calculate duration
+        calculateDateDuration();
+
+        // Show a success message
+        showMessage('Calendar mode enabled', 'success');
+    } else {
+        // Update toggle button
+        if (calToggleText) calToggleText.textContent = 'Enable Calendar';
+        if (calToggle) calToggle.classList.remove('active');
+
+        // Update form fields
+        if (hoursGroup) hoursGroup.style.display = 'block';
+        if (dateRange) dateRange.style.display = 'none';
+        if (endDate) endDate.style.display = 'none';
+        if (calcDuration) calcDuration.style.display = 'none';
+
+        // Show a success message
+        showMessage('Calendar mode disabled', 'success');
+    }
+}
+
+// Function to calculate duration between dates
+function calculateDateDuration() {
+    console.log('Calculating date duration');
+
+    // Get fresh references to the elements
+    const startDateEl = document.getElementById('start-date');
+    const endDateEl = document.getElementById('end-date');
+    const calculatedDurationEl = document.getElementById('calculated-duration');
+
+    // Check if elements exist
+    if (!startDateEl || !endDateEl || !calculatedDurationEl) {
+        console.error('Date elements not found:', {
+            startDateEl: !!startDateEl,
+            endDateEl: !!endDateEl,
+            calculatedDurationEl: !!calculatedDurationEl
+        });
+        return;
+    }
+
+    console.log('Date values:', {
+        startDate: startDateEl.value,
+        endDate: endDateEl.value
+    });
+
+    if (!startDateEl.value || !endDateEl.value) {
+        calculatedDurationEl.textContent = '0 days';
+        return;
+    }
+
+    const startDate = new Date(startDateEl.value);
+    const endDate = new Date(endDateEl.value);
+
+    // Validate dates
+    if (endDate < startDate) {
+        calculatedDurationEl.textContent = 'Invalid date range';
+        calculatedDurationEl.style.color = '#d32f2f';
+        return;
+    }
+
+    // Calculate difference in days
+    const diffTime = Math.abs(endDate - startDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    console.log('Calculated days:', diffDays);
+
+    // Update UI
+    calculatedDurationEl.textContent = `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+    calculatedDurationEl.style.color = '#333';
+}
+
+// Function to load calendar mode preference
+function loadCalendarModePreference() {
+    console.log('Loading calendar mode preference');
+
+    if (currentUser) {
+        try {
+            userCollection.doc(currentUser.id).get()
+                .then(doc => {
+                    console.log('User document retrieved');
+
+                    if (doc.exists) {
+                        const userData = doc.data();
+                        console.log('User data:', userData);
+
+                        if (userData.calendarModeEnabled !== undefined) {
+                            calendarModeEnabled = userData.calendarModeEnabled;
+                            console.log('Calendar mode preference loaded:', calendarModeEnabled);
+
+                            // Ensure we have the latest references before updating UI
+                            setTimeout(() => {
+                                updateCalendarModeUI();
+                            }, 300);
+                        } else {
+                            console.log('Calendar mode preference not found, using default:', calendarModeEnabled);
+
+                            // Save the default preference
+                            userCollection.doc(currentUser.id).update({
+                                calendarModeEnabled: calendarModeEnabled
+                            }).catch(error => {
+                                console.error('Error saving default calendar mode preference:', error);
+                            });
+                        }
+                    } else {
+                        console.log('User document does not exist');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading calendar mode preference:', error);
+                });
+        } catch (error) {
+            console.error('Error in loadCalendarModePreference:', error);
+        }
+    } else {
+        console.log('No current user, cannot load calendar mode preference');
+    }
+}
+
 // Functions
 function openTransactionModal() {
     transactionModal.style.display = 'flex';
 }
 
 function openHistoryModal() {
+    console.log('Opening history modal');
+
+    // Get a fresh reference to the history modal
+    const historyModalEl = document.getElementById('history-modal');
+
+    if (!historyModalEl) {
+        console.error('History modal element not found');
+        showMessage('Error: History modal not found', 'error');
+        return;
+    }
+
     // Initialize month and year selects
     initializeHistoryFilters();
 
@@ -78,7 +439,11 @@ function openHistoryModal() {
     loadHistoryData();
 
     // Show modal
-    historyModal.style.display = 'flex';
+    historyModalEl.style.display = 'flex';
+    console.log('History modal displayed');
+
+    // Show a message
+    showMessage('Revenue history loaded', 'success');
 }
 
 function closeModal(modalId) {
@@ -120,16 +485,52 @@ function initializeHistoryFilters() {
 function saveTransactionData() {
     // Check if user is logged in
     if (!currentUser) {
-        alert('Please log in to add transactions');
+        showMessage('Please log in to add transactions', 'error');
         window.location.href = 'login.html';
         return;
     }
 
     // Get form values
     const name = document.getElementById('name').value;
-    const duration = document.getElementById('duration').value;
     const amount = document.getElementById('amount').value;
     const status = document.getElementById('status').value;
+
+    // Get duration based on mode
+    let duration, startDate, endDate;
+
+    if (calendarModeEnabled) {
+        startDate = startDateInput.value;
+        endDate = endDateInput.value;
+
+        // Validate date inputs
+        if (!startDate || !endDate) {
+            showMessage('Please select both start and end dates', 'error');
+            return;
+        }
+
+        // Calculate duration in days
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (end < start) {
+            showMessage('End date must be after start date', 'error');
+            return;
+        }
+
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        duration = `${diffDays}d`;
+    } else {
+        duration = document.getElementById('duration').value;
+
+        // Validate duration
+        if (!duration) {
+            showMessage('Please enter duration', 'error');
+            return;
+        }
+
+        duration = `${duration}h`;
+    }
 
     // Validate form
     if (!name || !amount) {
@@ -144,12 +545,18 @@ function saveTransactionData() {
     // Create new transaction object
     const newTransaction = {
         name: name,
-        time: duration ? `${duration}h` : '0h',
+        time: duration,
         amount: parseFloat(amount),
         status: status,
         userId: currentUser.id,
         createdAt: new Date().toISOString()
     };
+
+    // Add date range if calendar mode is enabled
+    if (calendarModeEnabled) {
+        newTransaction.startDate = startDate;
+        newTransaction.endDate = endDate;
+    }
 
     // Save to Firebase
     try {
@@ -170,9 +577,24 @@ function saveTransactionData() {
 
                     // Reset form
                     document.getElementById('name').value = '';
-                    document.getElementById('duration').value = '';
                     document.getElementById('amount').value = '';
                     document.getElementById('status').value = 'pending';
+
+                    if (calendarModeEnabled) {
+                        // Reset date inputs to default values
+                        const today = new Date();
+                        startDateInput.valueAsDate = today;
+
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        endDateInput.valueAsDate = tomorrow;
+
+                        // Recalculate duration
+                        calculateDateDuration();
+                    } else {
+                        // Reset duration input
+                        document.getElementById('duration').value = '';
+                    }
 
                     // Re-enable save button
                     saveTransaction.disabled = false;
@@ -379,43 +801,103 @@ function toggleStatus(id) {
 }
 
 function logout() {
-    // Clear user data
-    currentUser = null;
-    localStorage.removeItem('currentUser');
+    console.log('Logout function called');
 
-    // Show success message
-    showMessage('Logged out successfully', 'success');
+    try {
+        // First redirect to login page immediately
+        // This is the most important part and should happen regardless of errors
+        console.log('Redirecting to login page immediately');
 
-    // Redirect to login page
-    setTimeout(() => {
+        // Clear user data first
+        currentUser = null;
+        localStorage.removeItem('currentUser');
+
+        // Use a simple alert instead of showMessage to avoid any potential errors
+        alert('Logged out successfully');
+
+        // Redirect immediately
         window.location.href = 'login.html';
-    }, 1000);
+    } catch (error) {
+        console.error('Critical error during logout:', error);
+
+        // If there's an error, still try to redirect
+        alert('Error during logout, but still redirecting to login page');
+        window.location.href = 'login.html';
+    }
 }
 
-function toggleUserMenu() {
-    const userMenu = document.querySelector('.user-menu');
-
-    // For mobile devices, use classList to toggle the 'show' class
-    if (window.innerWidth <= 600) {
-        userMenu.classList.toggle('show');
-    } else {
-        // For desktop, use the style.display property
-        userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+function toggleUserMenu(event) {
+    // Prevent the event from bubbling up to document
+    if (event) {
+        event.stopPropagation();
     }
 
-    // Close menu when clicking outside
-    const closeMenuOnClickOutside = (event) => {
-        if (!event.target.closest('.user-icon')) {
-            userMenu.classList.remove('show');
-            userMenu.style.display = 'none';
-            document.removeEventListener('click', closeMenuOnClickOutside);
-        }
-    };
+    const userMenu = document.querySelector('.user-menu');
+    const menuBackdrop = document.getElementById('menu-backdrop') || createMenuBackdrop();
 
-    // Add the event listener with a slight delay to prevent immediate closing
+    // Toggle menu visibility
+    if (userMenu.classList.contains('show')) {
+        // Hide menu
+        userMenu.classList.remove('show');
+        document.body.removeChild(menuBackdrop);
+    } else {
+        // Show menu
+        userMenu.classList.add('show');
+        document.body.appendChild(menuBackdrop);
+
+        // Position the menu correctly for mobile
+        if (window.innerWidth <= 600) {
+            const userIcon = document.querySelector('.user-icon');
+            const iconRect = userIcon.getBoundingClientRect();
+
+            userMenu.style.top = `${iconRect.bottom + 5}px`;
+            userMenu.style.right = `${window.innerWidth - iconRect.right}px`;
+        }
+    }
+}
+
+// Function to create a backdrop for the menu
+function createMenuBackdrop() {
+    const backdrop = document.createElement('div');
+    backdrop.id = 'menu-backdrop';
+    backdrop.style.position = 'fixed';
+    backdrop.style.top = '0';
+    backdrop.style.left = '0';
+    backdrop.style.width = '100%';
+    backdrop.style.height = '100%';
+    backdrop.style.zIndex = '99'; // Just below the menu (z-index 100)
+    backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.1)'; // Slight darkening for visual feedback
+    backdrop.style.transition = 'opacity 0.2s';
+
+    // Close menu when clicking or touching the backdrop
+    backdrop.addEventListener('click', closeBackdrop);
+    backdrop.addEventListener('touchstart', closeBackdrop);
+
+    function closeBackdrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const userMenu = document.querySelector('.user-menu');
+        if (userMenu) userMenu.classList.remove('show');
+
+        // Fade out effect
+        backdrop.style.opacity = '0';
+
+        // Remove after animation
+        setTimeout(() => {
+            if (backdrop.parentNode) {
+                document.body.removeChild(backdrop);
+            }
+        }, 200);
+    }
+
+    // Start with 0 opacity and fade in
+    backdrop.style.opacity = '0';
     setTimeout(() => {
-        document.addEventListener('click', closeMenuOnClickOutside);
-    }, 100);
+        backdrop.style.opacity = '1';
+    }, 10);
+
+    return backdrop;
 }
 
 function checkAuthState() {
@@ -501,9 +983,16 @@ function updateRevenueDisplay(amount) {
 
 // Function to format duration display
 function formatDuration(durationStr) {
-    // If the duration is already in the new format, return it
+    // If the duration is in days format (from calendar mode)
+    if (durationStr.includes('d')) {
+        const days = parseFloat(durationStr.replace('d', ''));
+        return `${days} day${days !== 1 ? 's' : ''}`;
+    }
+
+    // If the duration is in hours format
     if (durationStr.includes('h')) {
-        return durationStr;
+        const hours = parseFloat(durationStr.replace('h', ''));
+        return `${hours} hour${hours !== 1 ? 's' : ''}`;
     }
 
     // Handle old format (for backward compatibility)
@@ -511,12 +1000,12 @@ function formatDuration(durationStr) {
         // Convert minutes to hours
         const minutes = parseFloat(durationStr.replace('m', ''));
         const hours = (minutes / 60).toFixed(1);
-        return `${hours}h`;
+        return `${hours} hour${hours !== '1.0' ? 's' : ''}`;
     }
 
     // Handle seconds format
     if (durationStr.includes('s')) {
-        return '0h';
+        return '0 hours';
     }
 
     // Default case
@@ -719,86 +1208,175 @@ let activeMessages = [];
 let messageCounter = 0;
 
 function showMessage(message, type) {
-    // Create a unique ID for this message
-    const messageId = `message-${messageCounter++}`;
+    try {
+        console.log('Showing message:', message, type);
 
-    // Create message element
-    const messageElement = document.createElement('div');
-    messageElement.className = `message ${type}`;
-    messageElement.id = messageId;
-    messageElement.textContent = message;
+        // Create a unique ID for this message
+        const messageId = `message-${messageCounter++}`;
 
-    // Add close button
-    const closeButton = document.createElement('span');
-    closeButton.innerHTML = '&times;';
-    closeButton.className = 'message-close';
-    closeButton.addEventListener('click', () => {
-        removeMessage(messageId);
-    });
+        // Create message element
+        const messageElement = document.createElement('div');
+        messageElement.className = `message ${type}`;
+        messageElement.id = messageId;
+        messageElement.textContent = message;
 
-    messageElement.appendChild(closeButton);
+        // Add close button
+        const closeButton = document.createElement('span');
+        closeButton.innerHTML = '&times;';
+        closeButton.className = 'message-close';
+        closeButton.addEventListener('click', () => {
+            try {
+                removeMessage(messageId);
+            } catch (err) {
+                console.error('Error removing message:', err);
+            }
+        });
 
-    // Add to active messages
-    activeMessages.push({
-        id: messageId,
-        element: messageElement,
-        timer: null
-    });
+        messageElement.appendChild(closeButton);
 
-    // Position messages from bottom to top
-    positionMessages();
+        // Add to active messages array (create if it doesn't exist)
+        if (!window.activeMessages) {
+            window.activeMessages = [];
+        }
 
-    // Add to DOM
-    document.body.appendChild(messageElement);
+        window.activeMessages.push({
+            id: messageId,
+            element: messageElement,
+            timer: null
+        });
 
-    // Auto-remove after 3 seconds
-    const timer = setTimeout(() => {
-        removeMessage(messageId);
-    }, 3000);
+        // Position messages from bottom to top
+        try {
+            positionMessages();
+        } catch (err) {
+            console.error('Error positioning messages:', err);
+            // Set a default position if positioning fails
+            messageElement.style.bottom = '20px';
+        }
 
-    // Update the timer in our active messages array
-    const messageObj = activeMessages.find(m => m.id === messageId);
-    if (messageObj) {
-        messageObj.timer = timer;
+        // Add to DOM if body exists
+        if (document.body) {
+            document.body.appendChild(messageElement);
+        } else {
+            console.error('Document body not available');
+            return; // Exit early if body doesn't exist
+        }
+
+        // Auto-remove after 3 seconds
+        const timer = setTimeout(() => {
+            try {
+                removeMessage(messageId);
+            } catch (err) {
+                console.error('Error auto-removing message:', err);
+                // Fallback removal if removeMessage fails
+                if (messageElement.parentNode) {
+                    messageElement.parentNode.removeChild(messageElement);
+                }
+            }
+        }, 3000);
+
+        // Update the timer in our active messages array
+        const messageObj = window.activeMessages.find(m => m.id === messageId);
+        if (messageObj) {
+            messageObj.timer = timer;
+        }
+
+        return messageId; // Return the ID for potential future reference
+    } catch (error) {
+        console.error('Critical error in showMessage:', error);
+        // Don't throw further to prevent app from crashing
+
+        // Try a very basic alert as fallback
+        try {
+            alert(message);
+        } catch (alertError) {
+            console.error('Even alert failed:', alertError);
+        }
     }
 }
 
 function removeMessage(messageId) {
-    const index = activeMessages.findIndex(m => m.id === messageId);
-    if (index !== -1) {
-        const messageObj = activeMessages[index];
+    try {
+        console.log('Removing message:', messageId);
 
-        // Clear the timeout if it exists
-        if (messageObj.timer) {
-            clearTimeout(messageObj.timer);
-        }
+        // Use window.activeMessages to ensure we're accessing the global array
+        const messages = window.activeMessages || [];
+        const index = messages.findIndex(m => m.id === messageId);
 
-        // Add hide class for animation
-        messageObj.element.classList.add('hide');
+        if (index !== -1) {
+            const messageObj = messages[index];
 
-        // Remove from DOM after animation
-        setTimeout(() => {
-            if (messageObj.element.parentNode) {
-                messageObj.element.remove();
+            // Clear the timeout if it exists
+            if (messageObj.timer) {
+                clearTimeout(messageObj.timer);
             }
 
-            // Remove from active messages array
-            activeMessages.splice(index, 1);
+            // Add hide class for animation if element exists
+            if (messageObj.element) {
+                messageObj.element.classList.add('hide');
 
-            // Reposition remaining messages
-            positionMessages();
-        }, 300);
+                // Remove from DOM after animation
+                setTimeout(() => {
+                    try {
+                        if (messageObj.element && messageObj.element.parentNode) {
+                            messageObj.element.parentNode.removeChild(messageObj.element);
+                        }
+
+                        // Remove from active messages array
+                        if (window.activeMessages) {
+                            window.activeMessages.splice(index, 1);
+                        }
+
+                        // Reposition remaining messages
+                        positionMessages();
+                    } catch (err) {
+                        console.error('Error in removeMessage timeout callback:', err);
+                    }
+                }, 300);
+            } else {
+                // If element doesn't exist, just remove from array
+                if (window.activeMessages) {
+                    window.activeMessages.splice(index, 1);
+                }
+            }
+        } else {
+            console.warn('Message not found for removal:', messageId);
+        }
+    } catch (error) {
+        console.error('Error in removeMessage:', error);
     }
 }
 
 function positionMessages() {
-    // Position messages from bottom to top with 10px gap
-    let bottomOffset = 20;
+    try {
+        console.log('Positioning messages');
 
-    activeMessages.forEach(messageObj => {
-        messageObj.element.style.bottom = `${bottomOffset}px`;
-        bottomOffset += messageObj.element.offsetHeight + 10;
-    });
+        // Use window.activeMessages to ensure we're accessing the global array
+        const messages = window.activeMessages || [];
+
+        if (messages.length === 0) {
+            return; // No messages to position
+        }
+
+        // Position messages from bottom to top with 10px gap
+        let bottomOffset = 20;
+
+        messages.forEach(messageObj => {
+            if (messageObj && messageObj.element) {
+                messageObj.element.style.bottom = `${bottomOffset}px`;
+
+                // Only add height if we can get it
+                try {
+                    bottomOffset += messageObj.element.offsetHeight + 10;
+                } catch (err) {
+                    console.warn('Could not get element height, using default spacing');
+                    bottomOffset += 80; // Default height + spacing
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error in positionMessages:', error);
+    }
 }
 
 // Function to set up midnight check for daily history update
@@ -839,6 +1417,9 @@ function setupMidnightCheck() {
                     // Update the revenue display
                     const todayRevenue = calculateTodayRevenue(transactions);
                     updateRevenueDisplay(todayRevenue);
+
+                    // Check for approaching due dates
+                    checkDueDates();
 
                     // Show a message
                     showMessage('Daily revenue history updated', 'success');
@@ -883,4 +1464,174 @@ function setupMidnightCheck() {
                 }
             });
     }
+}
+
+// Function to request notification permission
+function requestNotificationPermission() {
+    // Check if the browser supports notifications
+    if ('Notification' in window) {
+        // Check if permission is not granted or denied
+        if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+            // Show a message asking for permission
+            showMessage('Would you like to receive notifications for approaching due dates?', 'info');
+
+            // Add a notification permission button
+            const permissionBtn = document.createElement('button');
+            permissionBtn.textContent = 'Allow Notifications';
+            permissionBtn.style.marginTop = '10px';
+            permissionBtn.style.padding = '8px 12px';
+            permissionBtn.style.backgroundColor = '#1a73e8';
+            permissionBtn.style.color = 'white';
+            permissionBtn.style.border = 'none';
+            permissionBtn.style.borderRadius = '4px';
+            permissionBtn.style.cursor = 'pointer';
+
+            // Add click event
+            permissionBtn.addEventListener('click', () => {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        showMessage('Notifications enabled!', 'success');
+                    }
+                });
+            });
+
+            // Add to the last message
+            const messages = document.querySelectorAll('.message');
+            if (messages.length > 0) {
+                const lastMessage = messages[messages.length - 1];
+                lastMessage.appendChild(document.createElement('br'));
+                lastMessage.appendChild(permissionBtn);
+            }
+        }
+    }
+}
+
+// Function to check for approaching due dates
+function checkDueDates() {
+    if (!currentUser) return;
+
+    // Only check if calendar mode is enabled and we have transactions with end dates
+    rentalCollection.where('userId', '==', currentUser.id)
+        .where('status', '==', 'pending') // Only check pending transactions
+        .get()
+        .then(snapshot => {
+            if (snapshot.empty) return;
+
+            const today = new Date();
+            const approachingDueDates = [];
+
+            snapshot.forEach(doc => {
+                const transaction = {
+                    id: doc.id,
+                    ...doc.data()
+                };
+
+                // Skip if no end date (not using calendar mode)
+                if (!transaction.endDate) return;
+
+                const endDate = new Date(transaction.endDate);
+                const daysUntilDue = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+
+                // Check if due date is approaching (2 days or less)
+                if (daysUntilDue <= 2 && daysUntilDue >= 0) {
+                    approachingDueDates.push({
+                        ...transaction,
+                        daysUntilDue
+                    });
+                }
+            });
+
+            // Show notifications for approaching due dates
+            if (approachingDueDates.length > 0) {
+                showDueDateNotifications(approachingDueDates);
+            }
+        })
+        .catch(error => {
+            console.error('Error checking due dates:', error);
+        });
+}
+
+// Function to show due date notifications
+function showDueDateNotifications(approachingDueDates) {
+    // Remove any existing notifications
+    const existingNotifications = document.querySelectorAll('.due-date-notification');
+    existingNotifications.forEach(notification => notification.remove());
+
+    // Show notifications for each approaching due date
+    approachingDueDates.forEach((transaction, index) => {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = 'due-date-notification';
+        notification.style.top = `${20 + (index * 90)}px`; // Stack notifications
+
+        // Add close button
+        const closeBtn = document.createElement('span');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.className = 'close-btn';
+        closeBtn.addEventListener('click', () => {
+            notification.remove();
+        });
+
+        // Create notification content
+        const content = document.createElement('div');
+        content.innerHTML = `
+            <strong>Due Date Approaching!</strong><br>
+            <span class="customer-name">${transaction.name}</span>'s transaction will
+            ${transaction.daysUntilDue === 0 ? 'end today' : `end in ${transaction.daysUntilDue} day${transaction.daysUntilDue !== 1 ? 's' : ''}`}.
+        `;
+
+        // Add elements to notification
+        notification.appendChild(closeBtn);
+        notification.appendChild(content);
+
+        // Add to document
+        document.body.appendChild(notification);
+
+        // Send browser notification if permission granted
+        if (Notification.permission === 'granted') {
+            const notificationTitle = 'Due Date Approaching';
+            const notificationOptions = {
+                body: `${transaction.name}'s transaction will ${transaction.daysUntilDue === 0 ? 'end today' : `end in ${transaction.daysUntilDue} day${transaction.daysUntilDue !== 1 ? 's' : ''}`}.`,
+                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png'
+            };
+
+            // Send more notifications for last day
+            if (transaction.daysUntilDue === 0) {
+                // Send 3 notifications for the last day
+                new Notification(notificationTitle, notificationOptions);
+
+                // Send second notification after 1 hour
+                setTimeout(() => {
+                    new Notification('URGENT: Due Date Today', {
+                        body: `${transaction.name}'s transaction ends today!`,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png'
+                    });
+                }, 60 * 60 * 1000); // 1 hour
+
+                // Send third notification after 2 hours
+                setTimeout(() => {
+                    new Notification('FINAL REMINDER: Due Date Today', {
+                        body: `${transaction.name}'s transaction ends today! Take action now.`,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png'
+                    });
+                }, 2 * 60 * 60 * 1000); // 2 hours
+            }
+            // Send 2 notifications for second-to-last day
+            else if (transaction.daysUntilDue === 1) {
+                new Notification(notificationTitle, notificationOptions);
+
+                // Send second notification after 2 hours
+                setTimeout(() => {
+                    new Notification('Reminder: Due Date Tomorrow', {
+                        body: `${transaction.name}'s transaction ends tomorrow!`,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png'
+                    });
+                }, 2 * 60 * 60 * 1000); // 2 hours
+            }
+            // Send 1 notification for earlier days
+            else {
+                new Notification(notificationTitle, notificationOptions);
+            }
+        }
+    });
 }
