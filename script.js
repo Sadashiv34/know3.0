@@ -117,11 +117,18 @@ setupMidnightCheck();
 // Load calendar mode preference
 loadCalendarModePreference();
 
-// Check for approaching due dates
-checkDueDates();
+// Initialize days remaining for calendar transactions
+document.addEventListener('DOMContentLoaded', () => {
+    // Update days remaining for transactions
+    if (calendarModeEnabled) {
+        updateDaysRemaining();
 
-// Request notification permission
-requestNotificationPermission();
+        // Check for approaching due dates after a short delay
+        setTimeout(() => {
+            checkDueDates();
+        }, 2000);
+    }
+});
 
 // Initialize menu event listeners
 document.addEventListener('DOMContentLoaded', initializeMenuEventListeners);
@@ -229,6 +236,7 @@ function initializeMenuEventListeners() {
 // Function to toggle calendar mode
 function toggleCalendarMode() {
     console.log('Toggle calendar mode called, current state:', calendarModeEnabled);
+    const wasDisabled = !calendarModeEnabled;
     calendarModeEnabled = !calendarModeEnabled;
     console.log('New calendar mode state:', calendarModeEnabled);
 
@@ -242,6 +250,16 @@ function toggleCalendarMode() {
                 calendarModeEnabled: calendarModeEnabled
             }).then(() => {
                 console.log('Calendar mode preference saved successfully');
+
+                // If calendar mode was just enabled, check if we should request notification permission
+                if (wasDisabled && calendarModeEnabled) {
+                    checkNotificationPermission();
+                }
+
+                // If calendar mode was enabled, check for due dates
+                if (calendarModeEnabled) {
+                    checkDueDates();
+                }
             }).catch(error => {
                 console.error('Error saving calendar mode preference:', error);
             });
@@ -1418,8 +1436,14 @@ function setupMidnightCheck() {
                     const todayRevenue = calculateTodayRevenue(transactions);
                     updateRevenueDisplay(todayRevenue);
 
+                    // Update days remaining for calendar transactions
+                    updateDaysRemaining();
+
                     // Check for approaching due dates
                     checkDueDates();
+
+                    // Clear dismissed notifications from yesterday
+                    clearDismissedNotifications();
 
                     // Show a message
                     showMessage('Daily revenue history updated', 'success');
@@ -1466,93 +1490,405 @@ function setupMidnightCheck() {
     }
 }
 
-// Function to request notification permission
-function requestNotificationPermission() {
-    // Check if the browser supports notifications
-    if ('Notification' in window) {
-        // Check if permission is not granted or denied
-        if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-            // Show a message asking for permission
-            showMessage('Would you like to receive notifications for approaching due dates?', 'info');
+// Function to update days remaining for all calendar transactions
+function updateDaysRemaining() {
+    console.log('Updating days remaining for calendar transactions');
 
-            // Add a notification permission button
-            const permissionBtn = document.createElement('button');
-            permissionBtn.textContent = 'Allow Notifications';
-            permissionBtn.style.marginTop = '10px';
-            permissionBtn.style.padding = '8px 12px';
-            permissionBtn.style.backgroundColor = '#1a73e8';
-            permissionBtn.style.color = 'white';
-            permissionBtn.style.border = 'none';
-            permissionBtn.style.borderRadius = '4px';
-            permissionBtn.style.cursor = 'pointer';
+    if (!currentUser) return;
 
-            // Add click event
-            permissionBtn.addEventListener('click', () => {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        showMessage('Notifications enabled!', 'success');
+    // Get all pending transactions with end dates
+    rentalCollection.where('userId', '==', currentUser.id)
+        .where('status', '==', 'pending')
+        .get()
+        .then(snapshot => {
+            if (snapshot.empty) {
+                console.log('No pending transactions found');
+                return;
+            }
+
+            const today = new Date();
+            const batch = db.batch();
+            let updatedCount = 0;
+
+            snapshot.forEach(doc => {
+                const transaction = doc.data();
+
+                // Only process transactions with end dates (calendar mode)
+                if (transaction.endDate) {
+                    const endDate = new Date(transaction.endDate);
+                    const daysUntilDue = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+
+                    // Update the transaction with days remaining
+                    batch.update(doc.ref, {
+                        daysRemaining: daysUntilDue,
+                        lastUpdated: new Date().toISOString()
+                    });
+
+                    updatedCount++;
+
+                    // If the due date has passed (negative days), mark as overdue
+                    if (daysUntilDue < 0) {
+                        batch.update(doc.ref, {
+                            status: 'overdue',
+                            overdueDate: new Date().toISOString()
+                        });
+                        console.log(`Transaction ${transaction.name} is overdue by ${Math.abs(daysUntilDue)} days`);
                     }
-                });
+                }
             });
 
-            // Add to the last message
-            const messages = document.querySelectorAll('.message');
-            if (messages.length > 0) {
-                const lastMessage = messages[messages.length - 1];
-                lastMessage.appendChild(document.createElement('br'));
-                lastMessage.appendChild(permissionBtn);
+            // Commit the batch update
+            if (updatedCount > 0) {
+                batch.commit()
+                    .then(() => {
+                        console.log(`Updated days remaining for ${updatedCount} transactions`);
+                    })
+                    .catch(error => {
+                        console.error('Error updating days remaining:', error);
+                    });
+            } else {
+                console.log('No transactions needed days remaining update');
             }
+        })
+        .catch(error => {
+            console.error('Error fetching transactions for days update:', error);
+        });
+}
+
+// Function to clear dismissed notifications from previous days
+function clearDismissedNotifications() {
+    console.log('Clearing dismissed notifications from previous days');
+
+    try {
+        const dismissedNotifications = JSON.parse(localStorage.getItem('dismissedNotifications') || '{}');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let hasChanges = false;
+
+        // Check each dismissed notification
+        Object.keys(dismissedNotifications).forEach(id => {
+            const dismissedDate = new Date(dismissedNotifications[id]);
+            dismissedDate.setHours(0, 0, 0, 0);
+
+            // If the dismissed date is before today, remove it
+            if (dismissedDate < today) {
+                delete dismissedNotifications[id];
+                hasChanges = true;
+            }
+        });
+
+        // Save changes if any were made
+        if (hasChanges) {
+            localStorage.setItem('dismissedNotifications', JSON.stringify(dismissedNotifications));
+            console.log('Cleared old dismissed notifications');
         }
+    } catch (error) {
+        console.error('Error clearing dismissed notifications:', error);
+    }
+}
+
+// Function to check notification permission status and request if needed
+function checkNotificationPermission() {
+    console.log('Checking notification permission');
+
+    // Check if the browser supports notifications
+    if (!('Notification' in window)) {
+        console.log('This browser does not support notifications');
+        return;
+    }
+
+    // Check if we already know the user's preference
+    if (currentUser) {
+        userCollection.doc(currentUser.id).get()
+            .then(doc => {
+                if (doc.exists) {
+                    const userData = doc.data();
+
+                    // If we haven't asked for permission yet
+                    if (userData.notificationPermissionAsked === undefined) {
+                        // Show the permission dialog
+                        showNotificationPermissionDialog();
+                    } else if (userData.notificationPermissionAsked && Notification.permission === 'granted') {
+                        // If permission was previously granted, show a confirmation message
+                        showMessage('Due date notifications are enabled', 'success');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking notification permission:', error);
+            });
+    }
+}
+
+// Function to show notification permission dialog
+function showNotificationPermissionDialog() {
+    // Create a modal dialog for permission
+    const dialogOverlay = document.createElement('div');
+    dialogOverlay.className = 'notification-dialog-overlay';
+    dialogOverlay.style.position = 'fixed';
+    dialogOverlay.style.top = '0';
+    dialogOverlay.style.left = '0';
+    dialogOverlay.style.width = '100%';
+    dialogOverlay.style.height = '100%';
+    dialogOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    dialogOverlay.style.zIndex = '2000';
+    dialogOverlay.style.display = 'flex';
+    dialogOverlay.style.justifyContent = 'center';
+    dialogOverlay.style.alignItems = 'center';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'notification-dialog';
+    dialog.style.backgroundColor = 'white';
+    dialog.style.borderRadius = '8px';
+    dialog.style.padding = '20px';
+    dialog.style.maxWidth = '400px';
+    dialog.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+    dialog.style.textAlign = 'center';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Enable Due Date Notifications';
+    title.style.margin = '0 0 15px 0';
+    title.style.color = '#333';
+
+    const message = document.createElement('p');
+    message.textContent = 'Would you like to receive notifications for approaching due dates? This will help you stay informed when transactions are about to expire.';
+    message.style.margin = '0 0 20px 0';
+    message.style.lineHeight = '1.5';
+    message.style.color = '#555';
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.justifyContent = 'center';
+    buttonContainer.style.gap = '10px';
+
+    const allowButton = document.createElement('button');
+    allowButton.textContent = 'Allow Notifications';
+    allowButton.style.padding = '10px 15px';
+    allowButton.style.backgroundColor = '#4CAF50';
+    allowButton.style.color = 'white';
+    allowButton.style.border = 'none';
+    allowButton.style.borderRadius = '4px';
+    allowButton.style.cursor = 'pointer';
+
+    const denyButton = document.createElement('button');
+    denyButton.textContent = 'No Thanks';
+    denyButton.style.padding = '10px 15px';
+    denyButton.style.backgroundColor = '#f5f5f5';
+    denyButton.style.color = '#333';
+    denyButton.style.border = '1px solid #ddd';
+    denyButton.style.borderRadius = '4px';
+    denyButton.style.cursor = 'pointer';
+
+    // Add event listeners
+    allowButton.addEventListener('click', () => {
+        // Request browser permission
+        Notification.requestPermission().then(permission => {
+            // Save the user's choice
+            saveNotificationPermission(permission === 'granted');
+
+            // Show appropriate message
+            if (permission === 'granted') {
+                showMessage('Due date notifications enabled!', 'success');
+            } else {
+                showMessage('Notification permission denied', 'info');
+            }
+
+            // Remove dialog
+            document.body.removeChild(dialogOverlay);
+        });
+    });
+
+    denyButton.addEventListener('click', () => {
+        // Save that the user denied permission
+        saveNotificationPermission(false);
+
+        // Show message
+        showMessage('Notifications will not be sent', 'info');
+
+        // Remove dialog
+        document.body.removeChild(dialogOverlay);
+    });
+
+    // Assemble dialog
+    buttonContainer.appendChild(allowButton);
+    buttonContainer.appendChild(denyButton);
+    dialog.appendChild(title);
+    dialog.appendChild(message);
+    dialog.appendChild(buttonContainer);
+    dialogOverlay.appendChild(dialog);
+
+    // Add to document
+    document.body.appendChild(dialogOverlay);
+}
+
+// Function to save notification permission preference
+function saveNotificationPermission(granted) {
+    if (currentUser) {
+        userCollection.doc(currentUser.id).update({
+            notificationPermissionAsked: true,
+            notificationPermissionGranted: granted,
+            notificationPermissionTimestamp: new Date().toISOString()
+        }).then(() => {
+            console.log('Notification permission preference saved:', granted);
+        }).catch(error => {
+            console.error('Error saving notification permission preference:', error);
+        });
     }
 }
 
 // Function to check for approaching due dates
 function checkDueDates() {
-    if (!currentUser) return;
+    console.log('Checking for approaching due dates');
 
-    // Only check if calendar mode is enabled and we have transactions with end dates
-    rentalCollection.where('userId', '==', currentUser.id)
-        .where('status', '==', 'pending') // Only check pending transactions
-        .get()
-        .then(snapshot => {
-            if (snapshot.empty) return;
+    if (!currentUser) {
+        console.log('No current user, skipping due date check');
+        return;
+    }
 
-            const today = new Date();
-            const approachingDueDates = [];
+    // Check if calendar mode is enabled
+    if (!calendarModeEnabled) {
+        console.log('Calendar mode is disabled, skipping due date check');
+        return;
+    }
 
-            snapshot.forEach(doc => {
-                const transaction = {
-                    id: doc.id,
-                    ...doc.data()
-                };
-
-                // Skip if no end date (not using calendar mode)
-                if (!transaction.endDate) return;
-
-                const endDate = new Date(transaction.endDate);
-                const daysUntilDue = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-
-                // Check if due date is approaching (2 days or less)
-                if (daysUntilDue <= 2 && daysUntilDue >= 0) {
-                    approachingDueDates.push({
-                        ...transaction,
-                        daysUntilDue
-                    });
-                }
-            });
-
-            // Show notifications for approaching due dates
-            if (approachingDueDates.length > 0) {
-                showDueDateNotifications(approachingDueDates);
+    // Check if notification permission is granted
+    userCollection.doc(currentUser.id).get()
+        .then(doc => {
+            if (!doc.exists) {
+                console.log('User document not found');
+                return;
             }
+
+            const userData = doc.data();
+            const notificationsEnabled = userData.notificationPermissionGranted === true;
+
+            console.log('Notifications enabled:', notificationsEnabled);
+
+            // Only check for due dates if calendar mode is enabled
+            rentalCollection.where('userId', '==', currentUser.id)
+                .where('status', '==', 'pending') // Only check pending transactions
+                .get()
+                .then(snapshot => {
+                    if (snapshot.empty) {
+                        console.log('No pending transactions found');
+                        return;
+                    }
+
+                    const today = new Date();
+                    const approachingDueDates = [];
+                    const dueTodayTransactions = [];
+                    const dueTomorrowTransactions = [];
+
+                    snapshot.forEach(doc => {
+                        const transaction = {
+                            id: doc.id,
+                            ...doc.data()
+                        };
+
+                        // Skip if no end date (not using calendar mode)
+                        if (!transaction.endDate) return;
+
+                        const endDate = new Date(transaction.endDate);
+                        const daysUntilDue = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+
+                        console.log(`Transaction ${transaction.name} due in ${daysUntilDue} days`);
+
+                        // Check if due date is approaching (2 days or less)
+                        if (daysUntilDue <= 2 && daysUntilDue >= 0) {
+                            const transactionWithDays = {
+                                ...transaction,
+                                daysUntilDue
+                            };
+
+                            approachingDueDates.push(transactionWithDays);
+
+                            // Separate transactions by due date for notification frequency
+                            if (daysUntilDue === 0) {
+                                dueTodayTransactions.push(transactionWithDays);
+                            } else if (daysUntilDue === 1) {
+                                dueTomorrowTransactions.push(transactionWithDays);
+                            }
+                        }
+                    });
+
+                    console.log(`Found ${approachingDueDates.length} approaching due dates`);
+                    console.log(`Due today: ${dueTodayTransactions.length}, Due tomorrow: ${dueTomorrowTransactions.length}`);
+
+                    // Show notifications for approaching due dates
+                    if (approachingDueDates.length > 0) {
+                        // Always show in-app notifications
+                        showDueDateNotifications(approachingDueDates);
+
+                        // Only send browser notifications if permission is granted
+                        if (notificationsEnabled && Notification.permission === 'granted') {
+                            // Schedule notifications based on frequency requirements
+                            scheduleNotifications(dueTodayTransactions, dueTomorrowTransactions);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking due dates:', error);
+                });
         })
         .catch(error => {
-            console.error('Error checking due dates:', error);
+            console.error('Error checking notification permission:', error);
         });
 }
 
-// Function to show due date notifications
+// Function to schedule notifications based on frequency requirements
+function scheduleNotifications(dueTodayTransactions, dueTomorrowTransactions) {
+    console.log('Scheduling notifications');
+
+    // Get current time
+    const now = new Date();
+    const currentHour = now.getHours();
+
+    // Schedule notifications for transactions due today (3 notifications)
+    dueTodayTransactions.forEach(transaction => {
+        // First notification immediately
+        sendBrowserNotification(
+            'URGENT: Due Date Today',
+            `${transaction.name}'s transaction ends today!`
+        );
+
+        // Second notification in 2 hours (or at noon if morning)
+        const secondNotificationHour = currentHour < 10 ? 12 : (currentHour + 2);
+        scheduleNotificationAt(secondNotificationHour, 0,
+            'URGENT: Due Date Today',
+            `${transaction.name}'s transaction ends today!`,
+            transaction
+        );
+
+        // Third notification in the evening (5 PM)
+        scheduleNotificationAt(17, 0,
+            'FINAL REMINDER: Due Date Today',
+            `${transaction.name}'s transaction ends today! Take action now.`,
+            transaction
+        );
+    });
+
+    // Schedule notifications for transactions due tomorrow (2 notifications)
+    dueTomorrowTransactions.forEach(transaction => {
+        // First notification immediately
+        sendBrowserNotification(
+            'Due Date Approaching',
+            `${transaction.name}'s transaction will end tomorrow.`
+        );
+
+        // Second notification in the afternoon (3 PM)
+        scheduleNotificationAt(15, 0,
+            'Reminder: Due Date Tomorrow',
+            `${transaction.name}'s transaction ends tomorrow!`,
+            transaction
+        );
+    });
+}
+
+// Function to show due date notifications in the app UI
 function showDueDateNotifications(approachingDueDates) {
+    console.log('Showing due date notifications in UI');
+
     // Remove any existing notifications
     const existingNotifications = document.querySelectorAll('.due-date-notification');
     existingNotifications.forEach(notification => notification.remove());
@@ -1562,6 +1898,7 @@ function showDueDateNotifications(approachingDueDates) {
         // Create notification element
         const notification = document.createElement('div');
         notification.className = 'due-date-notification';
+        notification.dataset.transactionId = transaction.id; // Store transaction ID for reference
         notification.style.top = `${20 + (index * 90)}px`; // Stack notifications
 
         // Add close button
@@ -1574,64 +1911,171 @@ function showDueDateNotifications(approachingDueDates) {
 
         // Create notification content
         const content = document.createElement('div');
+
+        // Format the message based on days remaining
+        let messageText = '';
+        if (transaction.daysUntilDue === 0) {
+            messageText = `<span class="customer-name">${transaction.name}</span>'s transaction will end today.`;
+        } else if (transaction.daysUntilDue === 1) {
+            messageText = `<span class="customer-name">${transaction.name}</span>'s transaction will end tomorrow.`;
+        } else {
+            messageText = `<span class="customer-name">${transaction.name}</span>'s transaction will end in ${transaction.daysUntilDue} days.`;
+        }
+
         content.innerHTML = `
             <strong>Due Date Approaching!</strong><br>
-            <span class="customer-name">${transaction.name}</span>'s transaction will
-            ${transaction.daysUntilDue === 0 ? 'end today' : `end in ${transaction.daysUntilDue} day${transaction.daysUntilDue !== 1 ? 's' : ''}`}.
+            ${messageText}
         `;
+
+        // Add action buttons
+        const actionButtons = document.createElement('div');
+        actionButtons.className = 'notification-actions';
+        actionButtons.style.marginTop = '10px';
+        actionButtons.style.display = 'flex';
+        actionButtons.style.justifyContent = 'space-between';
+
+        // View transaction button
+        const viewButton = document.createElement('button');
+        viewButton.textContent = 'View Details';
+        viewButton.style.padding = '5px 10px';
+        viewButton.style.backgroundColor = '#1a73e8';
+        viewButton.style.color = 'white';
+        viewButton.style.border = 'none';
+        viewButton.style.borderRadius = '4px';
+        viewButton.style.cursor = 'pointer';
+        viewButton.style.fontSize = '12px';
+        viewButton.addEventListener('click', () => {
+            // Open transaction details (you can implement this functionality)
+            showMessage(`Viewing details for ${transaction.name}'s transaction`, 'info');
+        });
+
+        // Dismiss for today button
+        const dismissButton = document.createElement('button');
+        dismissButton.textContent = 'Dismiss for Today';
+        dismissButton.style.padding = '5px 10px';
+        dismissButton.style.backgroundColor = '#f5f5f5';
+        dismissButton.style.color = '#333';
+        dismissButton.style.border = '1px solid #ddd';
+        dismissButton.style.borderRadius = '4px';
+        dismissButton.style.cursor = 'pointer';
+        dismissButton.style.fontSize = '12px';
+        dismissButton.addEventListener('click', () => {
+            // Store in localStorage that this notification was dismissed for today
+            const dismissedNotifications = JSON.parse(localStorage.getItem('dismissedNotifications') || '{}');
+            dismissedNotifications[transaction.id] = new Date().toISOString();
+            localStorage.setItem('dismissedNotifications', JSON.stringify(dismissedNotifications));
+
+            // Remove the notification
+            notification.remove();
+
+            showMessage(`Dismissed notification for ${transaction.name} for today`, 'info');
+        });
+
+        // Add buttons to action container
+        actionButtons.appendChild(viewButton);
+        actionButtons.appendChild(dismissButton);
 
         // Add elements to notification
         notification.appendChild(closeBtn);
         notification.appendChild(content);
+        notification.appendChild(actionButtons);
 
         // Add to document
         document.body.appendChild(notification);
-
-        // Send browser notification if permission granted
-        if (Notification.permission === 'granted') {
-            const notificationTitle = 'Due Date Approaching';
-            const notificationOptions = {
-                body: `${transaction.name}'s transaction will ${transaction.daysUntilDue === 0 ? 'end today' : `end in ${transaction.daysUntilDue} day${transaction.daysUntilDue !== 1 ? 's' : ''}`}.`,
-                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png'
-            };
-
-            // Send more notifications for last day
-            if (transaction.daysUntilDue === 0) {
-                // Send 3 notifications for the last day
-                new Notification(notificationTitle, notificationOptions);
-
-                // Send second notification after 1 hour
-                setTimeout(() => {
-                    new Notification('URGENT: Due Date Today', {
-                        body: `${transaction.name}'s transaction ends today!`,
-                        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png'
-                    });
-                }, 60 * 60 * 1000); // 1 hour
-
-                // Send third notification after 2 hours
-                setTimeout(() => {
-                    new Notification('FINAL REMINDER: Due Date Today', {
-                        body: `${transaction.name}'s transaction ends today! Take action now.`,
-                        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png'
-                    });
-                }, 2 * 60 * 60 * 1000); // 2 hours
-            }
-            // Send 2 notifications for second-to-last day
-            else if (transaction.daysUntilDue === 1) {
-                new Notification(notificationTitle, notificationOptions);
-
-                // Send second notification after 2 hours
-                setTimeout(() => {
-                    new Notification('Reminder: Due Date Tomorrow', {
-                        body: `${transaction.name}'s transaction ends tomorrow!`,
-                        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png'
-                    });
-                }, 2 * 60 * 60 * 1000); // 2 hours
-            }
-            // Send 1 notification for earlier days
-            else {
-                new Notification(notificationTitle, notificationOptions);
-            }
-        }
     });
+}
+
+// Function to send a browser notification
+function sendBrowserNotification(title, message, options = {}) {
+    console.log('Sending browser notification:', title, message);
+
+    // Check if notifications are supported and permission is granted
+    if (!('Notification' in window)) {
+        console.log('This browser does not support notifications');
+        return;
+    }
+
+    if (Notification.permission !== 'granted') {
+        console.log('Notification permission not granted');
+        return;
+    }
+
+    // Default notification options
+    const defaultOptions = {
+        body: message,
+        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
+        badge: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
+        vibrate: [200, 100, 200],
+        requireInteraction: false
+    };
+
+    // Merge default options with provided options
+    const notificationOptions = { ...defaultOptions, ...options };
+
+    // Create and show the notification
+    try {
+        const notification = new Notification(title, notificationOptions);
+
+        // Add click handler
+        notification.onclick = function() {
+            console.log('Notification clicked');
+            window.focus();
+            notification.close();
+        };
+
+        return notification;
+    } catch (error) {
+        console.error('Error creating notification:', error);
+    }
+}
+
+// Function to schedule a notification at a specific time
+function scheduleNotificationAt(hour, minute, title, message, transaction) {
+    console.log(`Scheduling notification for ${hour}:${minute}: ${title}`);
+
+    // Get current time
+    const now = new Date();
+
+    // Create target time for today
+    const targetTime = new Date();
+    targetTime.setHours(hour, minute, 0, 0);
+
+    // If the target time has already passed today, don't schedule
+    if (targetTime <= now) {
+        console.log('Target time has already passed today, not scheduling');
+        return;
+    }
+
+    // Calculate milliseconds until target time
+    const timeUntilNotification = targetTime.getTime() - now.getTime();
+
+    console.log(`Notification will be sent in ${timeUntilNotification / 1000 / 60} minutes`);
+
+    // Schedule the notification
+    setTimeout(() => {
+        // Check if the transaction is still relevant (not marked as paid, etc.)
+        rentalCollection.doc(transaction.id).get()
+            .then(doc => {
+                if (doc.exists) {
+                    const updatedTransaction = doc.data();
+
+                    // Only send notification if transaction is still pending
+                    if (updatedTransaction.status === 'pending') {
+                        sendBrowserNotification(title, message, {
+                            data: {
+                                transactionId: transaction.id
+                            }
+                        });
+                    } else {
+                        console.log('Transaction status changed, not sending notification');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking transaction before sending notification:', error);
+            });
+    }, timeUntilNotification);
+
+    // Return the timeout ID in case we need to cancel it later
+    return setTimeout(() => {}, timeUntilNotification);
 }
