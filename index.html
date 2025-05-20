@@ -25,24 +25,6 @@
             <div class="user-profile">
                 <span class="username" id="username-display"></span>
 
-                <!-- Notification Bell Icon -->
-                <div class="notification-bell" id="notification-bell">
-                    <i class="fas fa-bell"></i>
-                    <span class="notification-badge" id="notification-badge">0</span>
-
-                    <!-- Notification Panel -->
-                    <div class="notification-panel" id="notification-panel">
-                        <div class="notification-header">
-                            <h3>Due Date Notifications</h3>
-                            <button class="clear-all-btn" id="clear-all-notifications">Clear All</button>
-                        </div>
-                        <div class="notification-list" id="notification-list">
-                            <!-- Notifications will be added dynamically -->
-                            <div class="empty-notification">No notifications</div>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="user-icon">
                     <i class="fas fa-user-circle"></i>
                     <div class="user-menu">
@@ -69,6 +51,14 @@
             <div class="revenue-amount" id="today-revenue">₹ 0</div>
         </div>
 
+        <!-- Transaction Filter Buttons -->
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="expired">Expired</button>
+            <button class="filter-btn" data-filter="ending-today">Ending Today</button>
+            <button class="filter-btn" data-filter="due-soon">Due Soon</button>
+            <button class="filter-btn" data-filter="pending">Pending</button>
+        </div>
 
 
         <div class="transaction-table">

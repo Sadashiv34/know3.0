@@ -142,6 +142,61 @@ body {
     color: #388e3c;
 }
 
+/* Filter Buttons Styles */
+.filter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.filter-btn {
+    padding: 8px 15px;
+    background-color: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex: 1;
+    min-width: 80px;
+    text-align: center;
+}
+
+.filter-btn:hover {
+    background-color: #e8e8e8;
+    transform: translateY(-1px);
+}
+
+.filter-btn.active {
+    background-color: #1a73e8;
+    color: white;
+    border-color: #1a73e8;
+}
+
+/* Filter button specific colors */
+.filter-btn[data-filter="expired"].active {
+    background-color: #990000;
+    border-color: #990000;
+}
+
+.filter-btn[data-filter="ending-today"].active {
+    background-color: #FF0000;
+    border-color: #FF0000;
+}
+
+.filter-btn[data-filter="due-soon"].active {
+    background-color: #FFA500;
+    border-color: #FFA500;
+}
+
+.filter-btn[data-filter="pending"].active {
+    background-color: #f57c00;
+    border-color: #f57c00;
+}
+
 .user-profile {
     display: flex;
     align-items: center;
@@ -154,180 +209,7 @@ body {
     color: #555;
 }
 
-/* Notification Bell Styles */
-.notification-bell {
-    position: relative;
-    cursor: pointer;
-    font-size: 22px;
-    color: #555;
-    transition: color 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-}
 
-.notification-bell:hover {
-    color: #1a73e8;
-}
-
-.notification-badge {
-    position: absolute;
-    top: 0;
-    right: 0;
-    background-color: #f44336;
-    color: white;
-    font-size: 11px;
-    font-weight: 600;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: transform 0.2s;
-}
-
-.notification-badge:empty,
-.notification-badge[data-count="0"] {
-    display: none;
-}
-
-.notification-bell:hover .notification-badge {
-    transform: scale(1.1);
-}
-
-.notification-panel {
-    position: absolute;
-    top: 45px;
-    right: -100px;
-    width: 320px;
-    max-height: 400px;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
-    overflow: hidden;
-    display: none;
-    flex-direction: column;
-    animation: fadeInDown 0.3s ease-out;
-}
-
-.notification-panel.show {
-    display: flex;
-}
-
-.notification-header {
-    padding: 15px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.notification-header h3 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #333;
-}
-
-.clear-all-btn {
-    background: none;
-    border: none;
-    color: #1a73e8;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    padding: 5px 8px;
-    border-radius: 4px;
-}
-
-.clear-all-btn:hover {
-    background-color: #f1f8ff;
-}
-
-.notification-list {
-    overflow-y: auto;
-    max-height: 350px;
-    padding: 0;
-}
-
-.notification-item {
-    padding: 12px 15px;
-    border-bottom: 1px solid #f0f0f0;
-    transition: background-color 0.2s;
-}
-
-.notification-item:hover {
-    background-color: #f9f9f9;
-}
-
-.notification-item:last-child {
-    border-bottom: none;
-}
-
-.notification-content {
-    margin-bottom: 10px;
-}
-
-.notification-title {
-    font-weight: 600;
-    font-size: 14px;
-    color: #333;
-    margin-bottom: 3px;
-}
-
-.notification-details {
-    display: flex;
-    justify-content: space-between;
-    font-size: 13px;
-    color: #666;
-}
-
-.notification-actions {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.notification-actions button {
-    flex: 1;
-    padding: 6px 0;
-    border-radius: 4px;
-    border: none;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.dismiss-btn {
-    background-color: #f5f5f5;
-    color: #555;
-}
-
-.dismiss-btn:hover {
-    background-color: #e8e8e8;
-}
-
-.complete-btn {
-    background-color: #e8f5e9;
-    color: #2e7d32;
-}
-
-.complete-btn:hover {
-    background-color: #d7eeda;
-}
-
-.empty-notification {
-    padding: 20px;
-    text-align: center;
-    color: #888;
-    font-style: italic;
-    font-size: 14px;
-}
 
 .user-icon {
     width: 40px;
@@ -408,21 +290,6 @@ body {
         display: none; /* Hide username on mobile to save space */
     }
 
-    .notification-bell {
-        font-size: 18px;
-        width: 32px;
-        height: 32px;
-        position: relative;
-    }
-
-    .notification-badge {
-        width: 16px;
-        height: 16px;
-        font-size: 10px;
-        top: -5px;
-        right: -5px;
-    }
-
     .user-icon {
         width: 32px;
         height: 32px;
@@ -430,34 +297,6 @@ body {
 
     .user-icon i {
         font-size: 16px;
-    }
-
-    /* Mobile notification panel styles */
-    .notification-panel {
-        position: fixed;
-        top: 45px; /* Position right below the notification bell */
-        left: 0;
-        right: 0;
-        width: 100%;
-        max-width: 100%;
-        height: calc(100% - 45px);
-        max-height: none;
-        border-radius: 0;
-        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-        z-index: 1001;
-    }
-
-    .notification-list {
-        max-height: calc(100% - 50px);
-    }
-
-    .notification-item {
-        padding: 15px;
-    }
-
-    .notification-actions button {
-        padding: 10px 0;
-        font-size: 13px;
     }
 
     /* Mobile menu item styles */
@@ -724,6 +563,54 @@ body {
     background-color: #d32f2f;
     color: white;
     font-weight: 600;
+}
+
+/* Time remaining styles */
+.time-remaining {
+    display: block;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 10px;
+    margin-top: 6px;
+    transition: all 0.3s ease;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+    font-weight: 500;
+}
+
+.time-remaining.normal {
+    background-color: #e8f5e9;
+    color: #008000;
+}
+
+.time-remaining.warning {
+    background-color: #fff3e0;
+    color: #FFA500;
+    font-weight: 700; /* Bold text for better visibility */
+}
+
+.time-remaining.ending-today {
+    background-color: #FF0000; /* Red background for ending today */
+    color: #FFFFFF; /* White text for contrast */
+    font-weight: 700;
+    animation: pulse 1.5s infinite;
+}
+
+.time-remaining.expired {
+    background-color: #990000; /* Dark red background */
+    color: #FFFFFF; /* White text */
+    font-weight: 700;
+    animation: pulse 1.5s infinite;
+}
+
+/* Mobile optimization for time remaining */
+@media (max-width: 600px) {
+    .time-remaining {
+        font-size: 12px;
+        padding: 3px 6px;
+        margin-top: 4px;
+    }
 }
 
 /* Urgent transaction styling */
@@ -1028,101 +915,7 @@ body {
     word-wrap: break-word;
 }
 
-/* Due Date Notification */
-.due-date-notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 15px 20px;
-    padding-right: 35px; /* Space for close button */
-    border-radius: 8px;
-    background-color: #ff9800;
-    color: white;
-    font-size: 14px;
-    font-weight: 500;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    z-index: 2000;
-    animation: slideInFromTop 0.3s ease-out;
-    transition: opacity 0.3s, transform 0.3s;
-    max-width: 350px;
-    word-wrap: break-word;
-    border-left: 4px solid #e65100;
-    width: calc(100% - 40px);
-}
 
-.due-date-notification .customer-name {
-    font-weight: 700;
-}
-
-.due-date-notification .close-btn {
-    position: absolute;
-    right: 10px;
-    top: 10px;
-    cursor: pointer;
-    font-size: 16px;
-    opacity: 0.7;
-    transition: opacity 0.2s;
-}
-
-.due-date-notification .close-btn:hover {
-    opacity: 1;
-}
-
-.due-date-notification strong {
-    display: block;
-    margin-bottom: 5px;
-    font-size: 16px;
-}
-
-.notification-actions {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 12px;
-    gap: 10px;
-}
-
-.notification-actions button {
-    padding: 8px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s;
-}
-
-.notification-actions button:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-}
-
-.notification-actions button:active {
-    transform: translateY(0);
-}
-
-/* Notification Dialog */
-.notification-dialog-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 3000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    animation: fadeIn 0.3s ease-out;
-}
-
-.notification-dialog {
-    background-color: white;
-    border-radius: 8px;
-    padding: 20px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    text-align: center;
-    animation: scaleIn 0.3s ease-out;
-}
 
 @keyframes fadeIn {
     from {
@@ -1130,47 +923,6 @@ body {
     }
     to {
         opacity: 1;
-    }
-}
-
-@keyframes scaleIn {
-    from {
-        opacity: 0;
-        transform: scale(0.9);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-@keyframes slideInFromTop {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Mobile optimizations for notifications */
-@media (max-width: 600px) {
-    .due-date-notification {
-        left: 10px;
-        right: 10px;
-        width: calc(100% - 20px);
-        max-width: none;
-    }
-
-    .notification-actions {
-        flex-direction: column;
-    }
-
-    .notification-dialog {
-        width: 85%;
-        padding: 15px;
     }
 }
 
@@ -1300,6 +1052,58 @@ body {
         font-size: 20px;
     }
 
+    /* Mobile filter buttons - more compact design */
+    .filter-buttons {
+        gap: 4px;
+        margin-bottom: 8px;
+        justify-content: space-between;
+    }
+
+    .filter-btn {
+        padding: 5px 4px;
+        font-size: 11px;
+        min-width: 0;
+        flex: 1;
+        border-radius: 20px;
+        white-space: nowrap;
+        overflow: visible;
+        letter-spacing: -0.3px;
+        line-height: 1.2;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Special handling for buttons with longer text */
+    .filter-btn[data-filter="ending-today"] {
+        font-size: 9.5px;
+        letter-spacing: -0.5px;
+        padding: 5px 2px;
+    }
+
+    .filter-btn[data-filter="due-soon"] {
+        font-size: 10px;
+        letter-spacing: -0.4px;
+        padding: 5px 3px;
+    }
+
+    /* Maintain visual style for active buttons */
+    .filter-btn.active {
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        font-weight: 700;
+        letter-spacing: -0.2px; /* Less condensed for better readability when active */
+    }
+
+    /* Adjust hover effect for mobile */
+    .filter-btn:hover {
+        transform: none;
+    }
+
+    .filter-btn:active {
+        transform: scale(0.95);
+    }
+
     .table-header, .table-row {
         font-size: 14px;
     }
@@ -1328,9 +1132,13 @@ body {
     }
 
     .column.time {
-        flex: 0.9;
+        flex: 1;
         text-align: center;
         font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
     }
 
     .column.amount {

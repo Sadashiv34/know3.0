@@ -1,12 +1,6 @@
 // TypeScript declarations for global window properties
 // @ts-ignore
-window.approachingDueDates = [];
-// @ts-ignore
 window.upcomingDueDates = [];
-// @ts-ignore
-window.scheduledNotifications = [];
-// @ts-ignore
-window.dismissedDueDates = {};
 
 // Firebase Configuration
 const firebaseConfig = {
@@ -145,10 +139,231 @@ document.addEventListener('DOMContentLoaded', () => {
             checkDueDates();
         }, 2000);
     }
+
+    // Initialize the time remaining feature
+    updateTimeLeft();
+
+    // Update time remaining every minute
+    setInterval(updateTimeLeft, 60000);
+
+    // Initialize filter buttons
+    initializeFilterButtons();
 });
 
 // Initialize menu event listeners
 document.addEventListener('DOMContentLoaded', initializeMenuEventListeners);
+
+// Function to initialize filter buttons
+function initializeFilterButtons() {
+    const filterButtons = document.querySelectorAll('.filter-btn');
+
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Remove active class from all buttons
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+
+            // Add active class to clicked button
+            button.classList.add('active');
+
+            // Apply the filter
+            const filterType = button.getAttribute('data-filter');
+            filterTransactions(filterType);
+        });
+    });
+}
+
+// Function to filter transactions
+function filterTransactions(filterType) {
+    console.log(`Filtering transactions by: ${filterType}`);
+
+    // Get all transaction rows
+    const rows = document.querySelectorAll('.table-row');
+
+    // If no rows or only special rows (empty, loading, error), exit early
+    if (rows.length === 0 || (rows.length === 1 &&
+        (rows[0].classList.contains('empty') ||
+         rows[0].classList.contains('loading') ||
+         rows[0].classList.contains('error')))) {
+        return;
+    }
+
+    // Log filter type to console (no notification)
+    console.log(`Applied filter: ${filterType}`);
+
+    // Process each row
+    rows.forEach(row => {
+        // Skip special rows
+        if (row.classList.contains('empty') ||
+            row.classList.contains('loading') ||
+            row.classList.contains('error')) {
+            return;
+        }
+
+        // Get time remaining element if it exists
+        const timeElement = row.querySelector('.time-remaining');
+        const statusElement = row.querySelector('.status-badge');
+
+        // Default to hiding the row
+        let showRow = false;
+
+        // Apply filter based on type
+        switch(filterType) {
+            case 'all':
+                // Show all rows
+                showRow = true;
+                break;
+
+            case 'expired':
+                // Show only expired transactions
+                if (timeElement && timeElement.classList.contains('expired')) {
+                    showRow = true;
+                }
+                break;
+
+            case 'ending-today':
+                // Show only transactions ending today
+                if (timeElement && timeElement.classList.contains('ending-today')) {
+                    showRow = true;
+                }
+                break;
+
+            case 'due-soon':
+                // Show only transactions with 1-2 days remaining
+                if (timeElement && timeElement.classList.contains('warning')) {
+                    showRow = true;
+                }
+                break;
+
+            case 'pending':
+                // Show only pending transactions
+                if (statusElement && statusElement.classList.contains('pending')) {
+                    showRow = true;
+                }
+                break;
+        }
+
+        // Show or hide the row based on filter
+        row.style.display = showRow ? 'flex' : 'none';
+    });
+
+    // Check if any rows are visible
+    let visibleCount = 0;
+    rows.forEach(row => {
+        if (row.style.display !== 'none' &&
+            !row.classList.contains('empty') &&
+            !row.classList.contains('loading') &&
+            !row.classList.contains('error')) {
+            visibleCount++;
+        }
+    });
+
+    // If no rows are visible, show empty message
+    if (visibleCount === 0) {
+        // Remove any existing empty filter row
+        const existingEmptyRow = document.querySelector('.table-row.empty.filter-empty');
+        if (existingEmptyRow) {
+            existingEmptyRow.remove();
+        }
+
+        // Create and add empty row
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row empty filter-empty';
+        emptyRow.innerHTML = `<div class="column" style="text-align: center; flex: 1;">No transactions match the "${filterType}" filter.</div>`;
+        tableBody.appendChild(emptyRow);
+    } else {
+        // Remove empty filter row if it exists
+        const emptyRow = document.querySelector('.table-row.empty.filter-empty');
+        if (emptyRow) {
+            emptyRow.remove();
+        }
+    }
+}
+
+// Function to update time remaining for all transactions
+function updateTimeLeft() {
+    console.log('Updating time remaining for transactions');
+
+    // Select all elements with the time-remaining class
+    const timeElements = document.querySelectorAll('.time-remaining');
+
+    if (timeElements.length === 0) {
+        console.log('No time-remaining elements found');
+        return;
+    }
+
+    console.log(`Found ${timeElements.length} time-remaining elements`);
+
+    // Debug: Log the first element to see what we're working with
+    if (timeElements.length > 0) {
+        const firstElement = timeElements[0];
+        console.log('First time element:', {
+            element: firstElement,
+            endTime: firstElement.getAttribute('data-end-time'),
+            currentText: firstElement.textContent,
+            className: firstElement.className
+        });
+    }
+
+    // Get current time
+    const now = new Date();
+
+    // Update each time element
+    timeElements.forEach(element => {
+        // Get the end time from the data attribute
+        const endTimeStr = element.getAttribute('data-end-time');
+
+        if (!endTimeStr) {
+            console.log('No end time found for element', element);
+            element.textContent = 'Invalid date';
+            element.className = 'time-remaining expired';
+            return;
+        }
+
+        // Parse the end time
+        const endTime = new Date(endTimeStr);
+
+        // Calculate time difference in milliseconds
+        const diff = endTime - now;
+
+        // Format the time remaining
+        if (diff <= 0) {
+            // Time has expired
+            element.textContent = 'Expired';
+            element.className = 'time-remaining expired';
+        } else {
+            // Calculate days, hours (no minutes)
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+            // Format the time string - only days and hours
+            let timeString = '';
+            if (days > 0) {
+                timeString += `${days} day${days !== 1 ? 's' : ''} `;
+            }
+            if (hours > 0 || days === 0) {
+                timeString += `${hours} hour${hours !== 1 ? 's' : ''}`;
+            }
+
+            // Trim any extra spaces
+            timeString = timeString.trim();
+
+            // Update the element text
+            element.textContent = timeString;
+
+            // Apply appropriate class based on urgency
+            if (days === 0) {
+                // Ending today (0 days remaining)
+                element.className = 'time-remaining ending-today';
+            } else if (days === 1) {
+                // 1 day remaining
+                element.className = 'time-remaining warning';
+            } else {
+                // Normal (more than 1 day remaining)
+                element.className = 'time-remaining normal';
+            }
+        }
+    });
+}
 
 // Function to initialize menu event listeners
 function initializeMenuEventListeners() {
@@ -158,7 +373,6 @@ function initializeMenuEventListeners() {
     function closeMenu() {
         const userMenu = document.querySelector('.user-menu');
         const menuBackdrop = document.getElementById('menu-backdrop');
-        const notificationPanel = document.getElementById('notification-panel');
 
         if (userMenu && userMenu.classList.contains('show')) {
             userMenu.classList.remove('show');
@@ -166,15 +380,7 @@ function initializeMenuEventListeners() {
                 document.body.removeChild(menuBackdrop);
             }
         }
-
-        // Also close notification panel if open
-        if (notificationPanel && notificationPanel.classList.contains('show')) {
-            notificationPanel.classList.remove('show');
-        }
     }
-
-    // Initialize notification bell
-    initializeNotificationBell();
 
     // Add direct event listeners for menu items without replacing elements
     // Handle history button click
@@ -262,7 +468,6 @@ function initializeMenuEventListeners() {
 // Function to toggle calendar mode
 function toggleCalendarMode() {
     console.log('Toggle calendar mode called, current state:', calendarModeEnabled);
-    const wasDisabled = !calendarModeEnabled;
     calendarModeEnabled = !calendarModeEnabled;
     console.log('New calendar mode state:', calendarModeEnabled);
 
@@ -276,11 +481,6 @@ function toggleCalendarMode() {
                 calendarModeEnabled: calendarModeEnabled
             }).then(() => {
                 console.log('Calendar mode preference saved successfully');
-
-                // If calendar mode was just enabled, check if we should request notification permission
-                if (wasDisabled && calendarModeEnabled) {
-                    checkNotificationPermission();
-                }
 
                 // If calendar mode was enabled, check for due dates
                 if (calendarModeEnabled) {
@@ -664,6 +864,9 @@ function saveTransactionData() {
 
                 addTransactionToUI(transactionWithId);
 
+                // Update time remaining for the new transaction
+                updateTimeLeft();
+
                 // Close modal
                 closeModal('transaction-modal');
 
@@ -785,28 +988,39 @@ function addTransactionToUI(transaction) {
         // Format the duration display
         timeDisplay = formatDuration(transaction.time, 'calendar');
 
-        // If days remaining is available, add days remaining info
+        // If days remaining is available, update the icon based on urgency
         if (daysRemaining !== null) {
-            // Format days remaining text
-            let daysRemainingText = '';
+            // Update icon based on urgency
             if (daysRemaining === 0) {
-                daysRemainingText = '<span class="days-remaining urgent">Ends today!</span>';
                 timeIcon = '<i class="fas fa-exclamation-circle urgent-icon"></i>';
-            } else if (daysRemaining === 1) {
-                daysRemainingText = '<span class="days-remaining warning">1 day left</span>';
+            } else if (daysRemaining === 1 || daysRemaining === 2) {
                 timeIcon = '<i class="fas fa-exclamation-triangle warning-icon"></i>';
-            } else if (daysRemaining === 2) {
-                daysRemainingText = '<span class="days-remaining warning">2 days left</span>';
-                timeIcon = '<i class="fas fa-exclamation-triangle warning-icon"></i>';
-            } else if (daysRemaining > 0) {
-                daysRemainingText = `<span class="days-remaining">${daysRemaining} days left</span>`;
-            } else {
-                daysRemainingText = '<span class="days-remaining overdue">Overdue</span>';
+            } else if (daysRemaining < 0) {
                 timeIcon = '<i class="fas fa-exclamation-circle urgent-icon"></i>';
             }
 
-            // Add days remaining to time display
-            timeDisplay = `${timeDisplay} <br>${daysRemainingText}`;
+            // Add time remaining element with ISO format end date
+            if (transaction.endDate) {
+                const endDate = new Date(transaction.endDate);
+                // Set the end time to 23:59:59 on the end date
+                endDate.setHours(23, 59, 59, 999);
+
+                // Create the time-remaining element with data-end-time attribute
+                let initialClass = 'normal';
+                if (daysRemaining < 0) {
+                    initialClass = 'expired';
+                } else if (daysRemaining === 0) {
+                    initialClass = 'ending-today';
+                } else if (daysRemaining === 1) {
+                    initialClass = 'warning';
+                }
+
+                // Create the time-remaining element with appropriate initial class
+                const timeRemainingElement = `<span class="time-remaining ${initialClass}" data-end-time="${endDate.toISOString()}">Calculating time...</span>`;
+
+                // Set the time display to only show the dynamic time remaining
+                timeDisplay = `${timeDisplay} <br>${timeRemainingElement}`;
+            }
         }
     } else {
         // Hours mode transaction
@@ -1345,14 +1559,25 @@ function handleSearch() {
     const rows = document.querySelectorAll('.table-row');
     let visibleCount = 0;
 
-    // If search term is empty, show all rows
+    // Get current active filter
+    const activeFilter = document.querySelector('.filter-btn.active');
+    const filterType = activeFilter ? activeFilter.getAttribute('data-filter') : 'all';
+
+    // If search term is empty, apply the current filter
     if (!searchTerm) {
-        rows.forEach(row => {
-            if (!row.classList.contains('empty') && !row.classList.contains('error')) {
-                row.style.display = 'flex';
-                visibleCount++;
-            }
-        });
+        // If filter is "all", show all rows
+        if (filterType === 'all') {
+            rows.forEach(row => {
+                if (!row.classList.contains('empty') && !row.classList.contains('error')) {
+                    row.style.display = 'flex';
+                    visibleCount++;
+                }
+            });
+        } else {
+            // Otherwise, reapply the current filter
+            filterTransactions(filterType);
+            return;
+        }
 
         // Hide search results count
         searchResultsCount.textContent = '';
@@ -1383,10 +1608,39 @@ function handleSearch() {
         const statusText = statusColumn ? statusColumn.querySelector('.status-badge').textContent.trim().toLowerCase() : '';
 
         // Check if any field contains search term
-        if (name.includes(searchTerm) ||
+        const matchesSearch = name.includes(searchTerm) ||
             timeText.includes(searchTerm) ||
             amountText.includes(searchTerm) ||
-            statusText.includes(searchTerm)) {
+            statusText.includes(searchTerm);
+
+        // Check if row matches the current filter
+        let matchesFilter = true;
+
+        if (filterType !== 'all') {
+            const timeElement = row.querySelector('.time-remaining');
+            const statusElement = row.querySelector('.status-badge');
+
+            switch(filterType) {
+                case 'expired':
+                    matchesFilter = timeElement && timeElement.classList.contains('expired');
+                    break;
+
+                case 'ending-today':
+                    matchesFilter = timeElement && timeElement.classList.contains('ending-today');
+                    break;
+
+                case 'due-soon':
+                    matchesFilter = timeElement && timeElement.classList.contains('warning');
+                    break;
+
+                case 'pending':
+                    matchesFilter = statusElement && statusElement.classList.contains('pending');
+                    break;
+            }
+        }
+
+        // Show row only if it matches both search and filter
+        if (matchesSearch && matchesFilter) {
             row.style.display = 'flex';
             visibleCount++;
         } else {
@@ -1433,8 +1687,8 @@ function clearSearch() {
     // Show all regular rows and hide empty search results row
     const rows = document.querySelectorAll('.table-row');
     rows.forEach(row => {
-        if (row.classList.contains('search-empty')) {
-            // Hide empty search results row
+        if (row.classList.contains('search-empty') || row.classList.contains('filter-empty')) {
+            // Hide empty search results row and filter empty row
             row.style.display = 'none';
         } else if (!row.classList.contains('empty') && !row.classList.contains('error')) {
             // Show all regular transaction rows
@@ -1444,6 +1698,14 @@ function clearSearch() {
 
     // Clear search results count
     searchResultsCount.textContent = '';
+
+    // Reset filter buttons to "All"
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    filterButtons.forEach(btn => btn.classList.remove('active'));
+    const allButton = document.querySelector('.filter-btn[data-filter="all"]');
+    if (allButton) {
+        allButton.classList.add('active');
+    }
 
     // Focus on search input
     searchInput.focus();
@@ -1764,6 +2026,15 @@ function loadTransactions() {
 
             // Update revenue history for today
             updateTodayRevenueHistory(transactions);
+
+            // Update time remaining for all transactions
+            updateTimeLeft();
+
+            // Apply current filter if not "all"
+            const activeFilter = document.querySelector('.filter-btn.active');
+            if (activeFilter && activeFilter.getAttribute('data-filter') !== 'all') {
+                filterTransactions(activeFilter.getAttribute('data-filter'));
+            }
         })
         .catch(error => {
             console.error('Error loading transactions:', error);
@@ -1999,9 +2270,6 @@ function setupMidnightCheck() {
                     // Check for approaching due dates
                     checkDueDates();
 
-                    // Clear dismissed notifications from yesterday
-                    clearDismissedNotifications();
-
                     // Show a message
                     showMessage('Daily revenue history updated', 'success');
                 })
@@ -2072,8 +2340,6 @@ function updateDaysRemaining() {
 
             const batch = db.batch();
             let updatedCount = 0;
-            let urgentTransactions = [];
-            let warningTransactions = [];
 
             snapshot.forEach(doc => {
                 const transaction = {
@@ -2115,18 +2381,7 @@ function updateDaysRemaining() {
 
                         updatedCount++;
 
-                        // Track transactions that need notifications
-                        if (daysUntilDue === 0) {
-                            urgentTransactions.push({
-                                ...transaction,
-                                daysUntilDue
-                            });
-                        } else if (daysUntilDue === 1 || daysUntilDue === 2) {
-                            warningTransactions.push({
-                                ...transaction,
-                                daysUntilDue
-                            });
-                        }
+
                     }
 
                     // If the due date has passed (negative days), mark as overdue
@@ -2149,29 +2404,13 @@ function updateDaysRemaining() {
                     .then(() => {
                         console.log(`Updated days remaining for ${updatedCount} transactions`);
 
-                        // After updating, trigger notifications for urgent and warning transactions
-                        if (urgentTransactions.length > 0 || warningTransactions.length > 0) {
-                            // Combine urgent and warning transactions for notifications
-                            const notificationTransactions = [...urgentTransactions, ...warningTransactions];
 
-                            // Update notification badge
-                            updateNotificationBadge(notificationTransactions.length);
-
-                            // Store for notification panel
-                            window.approachingDueDates = notificationTransactions;
-
-                            // Show in-app notifications
-                            showDueDateNotifications(notificationTransactions);
-
-                            // Check if we should send browser notifications
-                            if (Notification.permission === 'granted') {
-                                // Schedule notifications with appropriate frequency
-                                scheduleNotifications(urgentTransactions, warningTransactions.filter(t => t.daysUntilDue === 1));
-                            }
-                        }
 
                         // Reload transactions to update UI
                         loadTransactions();
+
+                        // Update time remaining after days remaining are updated
+                        setTimeout(updateTimeLeft, 1000);
                     })
                     .catch(error => {
                         console.error('Error updating days remaining:', error);
@@ -2185,187 +2424,9 @@ function updateDaysRemaining() {
         });
 }
 
-// Function to clear dismissed notifications from previous days
-function clearDismissedNotifications() {
-    console.log('Clearing dismissed notifications from previous days');
 
-    try {
-        const dismissedNotifications = JSON.parse(localStorage.getItem('dismissedNotifications') || '{}');
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
 
-        let hasChanges = false;
 
-        // Check each dismissed notification
-        Object.keys(dismissedNotifications).forEach(id => {
-            const dismissedDate = new Date(dismissedNotifications[id]);
-            dismissedDate.setHours(0, 0, 0, 0);
-
-            // If the dismissed date is before today, remove it
-            if (dismissedDate < today) {
-                delete dismissedNotifications[id];
-                hasChanges = true;
-            }
-        });
-
-        // Save changes if any were made
-        if (hasChanges) {
-            localStorage.setItem('dismissedNotifications', JSON.stringify(dismissedNotifications));
-            console.log('Cleared old dismissed notifications');
-        }
-    } catch (error) {
-        console.error('Error clearing dismissed notifications:', error);
-    }
-}
-
-// Function to check notification permission status and request if needed
-function checkNotificationPermission() {
-    console.log('Checking notification permission');
-
-    // Check if the browser supports notifications
-    if (!('Notification' in window)) {
-        console.log('This browser does not support notifications');
-        return;
-    }
-
-    // Check if we already know the user's preference
-    if (currentUser) {
-        userCollection.doc(currentUser.id).get()
-            .then(doc => {
-                if (doc.exists) {
-                    const userData = doc.data();
-
-                    // If we haven't asked for permission yet
-                    if (userData.notificationPermissionAsked === undefined) {
-                        // Show the permission dialog
-                        showNotificationPermissionDialog();
-                    } else if (userData.notificationPermissionAsked && Notification.permission === 'granted') {
-                        // If permission was previously granted, show a confirmation message
-                        showMessage('Due date notifications are enabled', 'success');
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error checking notification permission:', error);
-            });
-    }
-}
-
-// Function to show notification permission dialog
-function showNotificationPermissionDialog() {
-    // Create a modal dialog for permission
-    const dialogOverlay = document.createElement('div');
-    dialogOverlay.className = 'notification-dialog-overlay';
-    dialogOverlay.style.position = 'fixed';
-    dialogOverlay.style.top = '0';
-    dialogOverlay.style.left = '0';
-    dialogOverlay.style.width = '100%';
-    dialogOverlay.style.height = '100%';
-    dialogOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    dialogOverlay.style.zIndex = '2000';
-    dialogOverlay.style.display = 'flex';
-    dialogOverlay.style.justifyContent = 'center';
-    dialogOverlay.style.alignItems = 'center';
-
-    const dialog = document.createElement('div');
-    dialog.className = 'notification-dialog';
-    dialog.style.backgroundColor = 'white';
-    dialog.style.borderRadius = '8px';
-    dialog.style.padding = '20px';
-    dialog.style.maxWidth = '400px';
-    dialog.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-    dialog.style.textAlign = 'center';
-
-    const title = document.createElement('h3');
-    title.textContent = 'Enable Due Date Notifications';
-    title.style.margin = '0 0 15px 0';
-    title.style.color = '#333';
-
-    const message = document.createElement('p');
-    message.textContent = 'Would you like to receive notifications for approaching due dates? This will help you stay informed when transactions are about to expire.';
-    message.style.margin = '0 0 20px 0';
-    message.style.lineHeight = '1.5';
-    message.style.color = '#555';
-
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.justifyContent = 'center';
-    buttonContainer.style.gap = '10px';
-
-    const allowButton = document.createElement('button');
-    allowButton.textContent = 'Allow Notifications';
-    allowButton.style.padding = '10px 15px';
-    allowButton.style.backgroundColor = '#4CAF50';
-    allowButton.style.color = 'white';
-    allowButton.style.border = 'none';
-    allowButton.style.borderRadius = '4px';
-    allowButton.style.cursor = 'pointer';
-
-    const denyButton = document.createElement('button');
-    denyButton.textContent = 'No Thanks';
-    denyButton.style.padding = '10px 15px';
-    denyButton.style.backgroundColor = '#f5f5f5';
-    denyButton.style.color = '#333';
-    denyButton.style.border = '1px solid #ddd';
-    denyButton.style.borderRadius = '4px';
-    denyButton.style.cursor = 'pointer';
-
-    // Add event listeners
-    allowButton.addEventListener('click', () => {
-        // Request browser permission
-        Notification.requestPermission().then(permission => {
-            // Save the user's choice
-            saveNotificationPermission(permission === 'granted');
-
-            // Show appropriate message
-            if (permission === 'granted') {
-                showMessage('Due date notifications enabled!', 'success');
-            } else {
-                showMessage('Notification permission denied', 'info');
-            }
-
-            // Remove dialog
-            document.body.removeChild(dialogOverlay);
-        });
-    });
-
-    denyButton.addEventListener('click', () => {
-        // Save that the user denied permission
-        saveNotificationPermission(false);
-
-        // Show message
-        showMessage('Notifications will not be sent', 'info');
-
-        // Remove dialog
-        document.body.removeChild(dialogOverlay);
-    });
-
-    // Assemble dialog
-    buttonContainer.appendChild(allowButton);
-    buttonContainer.appendChild(denyButton);
-    dialog.appendChild(title);
-    dialog.appendChild(message);
-    dialog.appendChild(buttonContainer);
-    dialogOverlay.appendChild(dialog);
-
-    // Add to document
-    document.body.appendChild(dialogOverlay);
-}
-
-// Function to save notification permission preference
-function saveNotificationPermission(granted) {
-    if (currentUser) {
-        userCollection.doc(currentUser.id).update({
-            notificationPermissionAsked: true,
-            notificationPermissionGranted: granted,
-            notificationPermissionTimestamp: new Date().toISOString()
-        }).then(() => {
-            console.log('Notification permission preference saved:', granted);
-        }).catch(error => {
-            console.error('Error saving notification permission preference:', error);
-        });
-    }
-}
 
 // Function to check for approaching due dates
 function checkDueDates() {
@@ -2382,299 +2443,212 @@ function checkDueDates() {
         return;
     }
 
-    // Check if notification permission is granted
-    userCollection.doc(currentUser.id).get()
-        .then(doc => {
-            if (!doc.exists) {
-                console.log('User document not found');
+    // Only check for due dates if calendar mode is enabled
+    rentalCollection.where('userId', '==', currentUser.id)
+        .where('status', '==', 'pending') // Only check pending transactions
+        .get()
+        .then(snapshot => {
+            if (snapshot.empty) {
+                console.log('No pending transactions found');
                 return;
             }
 
-            const userData = doc.data();
-            const notificationsEnabled = userData.notificationPermissionGranted === true;
+            const today = new Date();
+            const upcomingDueDates = []; // Due within 7 days or overdue
+            const overdueTransactions = [];
 
-            console.log('Notifications enabled:', notificationsEnabled);
+            snapshot.forEach(doc => {
+                const transaction = {
+                    id: doc.id,
+                    ...doc.data()
+                };
 
-            // Only check for due dates if calendar mode is enabled
-            rentalCollection.where('userId', '==', currentUser.id)
-                .where('status', '==', 'pending') // Only check pending transactions
-                .get()
-                .then(snapshot => {
-                    if (snapshot.empty) {
-                        console.log('No pending transactions found');
-                        updateNotificationBadge(0);
-                        return;
-                    }
+                // Only process calendar mode transactions
+                const isCalendarMode = transaction.timeMode === 'calendar' ||
+                                     (transaction.endDate && transaction.endDate !== '' && !transaction.timeMode);
 
-                    const today = new Date();
-                    const approachingDueDates = []; // Due within 2 days
-                    const upcomingDueDates = []; // Due within 7 days or overdue
-                    const dueTodayTransactions = [];
-                    const dueTomorrowTransactions = [];
-                    const overdueTransactions = [];
+                // Skip if not a calendar mode transaction
+                if (!isCalendarMode) {
+                    console.log(`Skipping hours mode transaction ${transaction.name} in due date check`);
+                    return;
+                }
 
-                    snapshot.forEach(doc => {
-                        const transaction = {
-                            id: doc.id,
-                            ...doc.data()
-                        };
+                // Skip if no end date (should not happen for calendar mode, but check anyway)
+                if (!transaction.endDate) {
+                    console.log(`Skipping calendar mode transaction ${transaction.name} with no end date`);
+                    return;
+                }
 
-                        // Only process calendar mode transactions
-                        const isCalendarMode = transaction.timeMode === 'calendar' ||
-                                             (transaction.endDate && transaction.endDate !== '' && !transaction.timeMode);
+                const endDate = new Date(transaction.endDate);
+                const daysUntilDue = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
 
-                        // Skip if not a calendar mode transaction
-                        if (!isCalendarMode) {
-                            console.log(`Skipping hours mode transaction ${transaction.name} in due date check`);
-                            return;
-                        }
+                console.log(`Transaction ${transaction.name} due in ${daysUntilDue} days`);
 
-                        // Skip if no end date (should not happen for calendar mode, but check anyway)
-                        if (!transaction.endDate) {
-                            console.log(`Skipping calendar mode transaction ${transaction.name} with no end date`);
-                            return;
-                        }
+                // Add daysUntilDue to transaction object
+                const transactionWithDays = {
+                    ...transaction,
+                    daysUntilDue
+                };
 
-                        const endDate = new Date(transaction.endDate);
-                        const daysUntilDue = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                // Check if due date is within 7 days or overdue
+                if (daysUntilDue <= 7) {
+                    upcomingDueDates.push(transactionWithDays);
+                }
 
-                        console.log(`Transaction ${transaction.name} due in ${daysUntilDue} days`);
+                // Check if transaction is overdue
+                if (daysUntilDue < 0) {
+                    overdueTransactions.push(transactionWithDays);
+                    upcomingDueDates.push(transactionWithDays); // Include overdue in upcoming
+                }
+            });
 
-                        // Add daysUntilDue to transaction object
-                        const transactionWithDays = {
-                            ...transaction,
-                            daysUntilDue
-                        };
+            console.log(`Found ${upcomingDueDates.length} upcoming due dates (within 7 days)`);
+            console.log(`Found ${overdueTransactions.length} overdue transactions`);
 
-                        // Check if due date is approaching (2 days or less)
-                        if (daysUntilDue <= 2 && daysUntilDue >= 0) {
-                            approachingDueDates.push(transactionWithDays);
-
-                            // Separate transactions by due date for notification frequency
-                            if (daysUntilDue === 0) {
-                                dueTodayTransactions.push(transactionWithDays);
-                            } else if (daysUntilDue === 1) {
-                                dueTomorrowTransactions.push(transactionWithDays);
-                            }
-                        }
-
-                        // Check if due date is within 7 days or overdue
-                        if (daysUntilDue <= 7) {
-                            upcomingDueDates.push(transactionWithDays);
-                        }
-
-                        // Check if transaction is overdue
-                        if (daysUntilDue < 0) {
-                            overdueTransactions.push(transactionWithDays);
-                            upcomingDueDates.push(transactionWithDays); // Include overdue in upcoming
-                        }
-                    });
-
-                    console.log(`Found ${approachingDueDates.length} approaching due dates`);
-                    console.log(`Found ${upcomingDueDates.length} upcoming due dates (within 7 days)`);
-                    console.log(`Found ${overdueTransactions.length} overdue transactions`);
-                    console.log(`Due today: ${dueTodayTransactions.length}, Due tomorrow: ${dueTomorrowTransactions.length}`);
-
-                    // Update notification badge with count of approaching due dates (2 days or less)
-                    updateNotificationBadge(approachingDueDates.length);
-
-                    // Update due dates badge with count of all upcoming due dates (7 days or less + overdue)
-                    updateDueDatesBadge(upcomingDueDates.length);
-
-                    // Store approaching due dates for the notification panel
-                    window.approachingDueDates = approachingDueDates;
-
-                    // Store upcoming due dates for the due dates panel
-                    window.upcomingDueDates = upcomingDueDates;
-
-                    // Show notifications for approaching due dates
-                    if (approachingDueDates.length > 0) {
-                        // Always show in-app notifications
-                        showDueDateNotifications(approachingDueDates);
-
-                        // Only send browser notifications if permission is granted
-                        if (notificationsEnabled && Notification.permission === 'granted') {
-                            // Schedule notifications based on frequency requirements
-                            scheduleNotifications(dueTodayTransactions, dueTomorrowTransactions);
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error checking due dates:', error);
-                });
+            // Store upcoming due dates for the due dates panel
+            window.upcomingDueDates = upcomingDueDates;
         })
         .catch(error => {
-            console.error('Error checking notification permission:', error);
+            console.error('Error checking due dates:', error);
         });
 }
 
-// Function to initialize notification bell
-function initializeNotificationBell() {
-    console.log('Initializing notification bell');
 
-    const notificationBell = document.getElementById('notification-bell');
-    const notificationPanel = document.getElementById('notification-panel');
-    const clearAllBtn = document.getElementById('clear-all-notifications');
 
-    if (!notificationBell || !notificationPanel || !clearAllBtn) {
-        console.error('Notification elements not found');
-        return;
-    }
+// Function to show transaction details
+function showTransactionDetails(transaction) {
+    console.log('Showing transaction details:', transaction);
 
-    // Toggle notification panel on bell click
-    notificationBell.addEventListener('click', function(e) {
-        e.stopPropagation();
-        notificationPanel.classList.toggle('show');
+    // Create a modal for transaction details
+    const detailsModal = document.createElement('div');
+    detailsModal.className = 'modal';
+    detailsModal.id = 'transaction-details-modal';
+    detailsModal.style.display = 'flex';
 
-        // Update notification panel content when opened
-        if (notificationPanel.classList.contains('show')) {
-            updateNotificationPanel();
-        }
-    });
+    // Calculate time remaining
+    const now = new Date();
+    let timeRemainingText = '';
+    let timeRemainingClass = '';
 
-    // Clear all notifications
-    clearAllBtn.addEventListener('click', function() {
-        clearAllNotifications();
-    });
+    if (transaction.endDate) {
+        const endDate = new Date(transaction.endDate);
+        endDate.setHours(23, 59, 59, 999);
 
-    // Close notification panel when clicking outside
-    document.addEventListener('click', function(e) {
-        if (notificationPanel.classList.contains('show')) {
-            if (!notificationPanel.contains(e.target) && e.target !== notificationBell) {
-                notificationPanel.classList.remove('show');
+        const diff = endDate - now;
+
+        if (diff <= 0) {
+            timeRemainingText = 'Expired';
+            timeRemainingClass = 'expired';
+        } else {
+            // Calculate days and hours
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+            // Format time string
+            if (days > 0) {
+                timeRemainingText = `${days} day${days !== 1 ? 's' : ''} `;
+            }
+            if (hours > 0 || days === 0) {
+                timeRemainingText += `${hours} hour${hours !== 1 ? 's' : ''}`;
+            }
+            timeRemainingText = timeRemainingText.trim();
+
+            // Set class based on urgency
+            if (days === 0) {
+                timeRemainingClass = 'ending-today';
+            } else if (days === 1) {
+                timeRemainingClass = 'warning';
+            } else {
+                timeRemainingClass = 'normal';
             }
         }
-    });
-
-    // Initial check for notifications
-    if (calendarModeEnabled) {
-        setTimeout(() => {
-            checkDueDates();
-        }, 1000);
-    }
-}
-
-// Function to update notification badge count
-function updateNotificationBadge(count) {
-    const badge = document.getElementById('notification-badge');
-    if (!badge) return;
-
-    badge.textContent = count;
-
-    if (count > 0) {
-        badge.style.display = 'flex';
-    } else {
-        badge.style.display = 'none';
-    }
-}
-
-// Function to update notification panel content
-function updateNotificationPanel() {
-    console.log('Updating notification panel');
-
-    const notificationList = document.getElementById('notification-list');
-    if (!notificationList) return;
-
-    // Clear existing notifications
-    notificationList.innerHTML = '';
-
-    // Get approaching due dates
-    const approachingDueDates = window.approachingDueDates || [];
-
-    if (approachingDueDates.length === 0) {
-        // Show empty state
-        const emptyNotification = document.createElement('div');
-        emptyNotification.className = 'empty-notification';
-        emptyNotification.textContent = 'No notifications';
-        notificationList.appendChild(emptyNotification);
-        return;
     }
 
-    // Add notifications to panel
-    approachingDueDates.forEach(transaction => {
-        addNotificationToPanel(transaction);
-    });
-}
+    // Format dates
+    const createdDate = new Date(transaction.createdAt);
+    const formattedCreatedDate = formatDateForDisplay(createdDate);
 
-// Function to add a notification to the panel
-function addNotificationToPanel(transaction) {
-    const notificationList = document.getElementById('notification-list');
-    if (!notificationList) return;
-
-    const notificationItem = document.createElement('div');
-    notificationItem.className = 'notification-item';
-    notificationItem.dataset.id = transaction.id;
-
-    // Format days text
-    let daysText = '';
-    if (transaction.daysUntilDue === 0) {
-        daysText = 'Ends today';
-    } else if (transaction.daysUntilDue === 1) {
-        daysText = 'Ends tomorrow';
-    } else {
-        daysText = `Ends in ${transaction.daysUntilDue} days`;
+    let endDateDisplay = '';
+    if (transaction.endDate) {
+        const endDate = new Date(transaction.endDate);
+        endDateDisplay = formatDateForDisplay(endDate);
     }
 
-    notificationItem.innerHTML = `
-        <div class="notification-content">
-            <div class="notification-title">${transaction.name}</div>
-            <div class="notification-details">
-                <span>${daysText}</span>
-                <span>₹ ${transaction.amount.toFixed(2)}</span>
+    // Create modal content
+    detailsModal.innerHTML = `
+        <div class="modal-content transaction-details">
+            <div class="modal-header">
+                <h2>Transaction Details</h2>
+                <span class="close" id="close-details-modal">&times;</span>
             </div>
-        </div>
-        <div class="notification-actions">
-            <button class="dismiss-btn" data-id="${transaction.id}">Dismiss</button>
-            <button class="complete-btn" data-id="${transaction.id}">Mark Complete</button>
+            <div class="modal-body">
+                <div class="detail-row">
+                    <div class="detail-label">Customer:</div>
+                    <div class="detail-value">${transaction.name}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Amount:</div>
+                    <div class="detail-value">₹ ${transaction.amount.toFixed(2)}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Status:</div>
+                    <div class="detail-value">
+                        <span class="status-badge ${transaction.status}">${transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}</span>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Created:</div>
+                    <div class="detail-value">${formattedCreatedDate}</div>
+                </div>
+                ${endDateDisplay ? `
+                <div class="detail-row">
+                    <div class="detail-label">End Date:</div>
+                    <div class="detail-value">${endDateDisplay}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Time Remaining:</div>
+                    <div class="detail-value">
+                        <span class="time-remaining ${timeRemainingClass}">${timeRemainingText}</span>
+                    </div>
+                </div>
+                ` : ''}
+                ${transaction.transactionNumber ? `
+                <div class="detail-row">
+                    <div class="detail-label">Transaction #:</div>
+                    <div class="detail-value">${transaction.transactionNumber}</div>
+                </div>
+                ` : ''}
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" id="close-details-btn">Close</button>
+                <button class="save-btn" id="mark-complete-details-btn">Mark Complete</button>
+            </div>
         </div>
     `;
 
+    // Add to document
+    document.body.appendChild(detailsModal);
+
     // Add event listeners
-    const dismissBtn = notificationItem.querySelector('.dismiss-btn');
-    const completeBtn = notificationItem.querySelector('.complete-btn');
-
-    dismissBtn.addEventListener('click', function() {
-        dismissNotification(transaction.id);
+    document.getElementById('close-details-modal').addEventListener('click', () => {
+        detailsModal.remove();
     });
 
-    completeBtn.addEventListener('click', function() {
+    document.getElementById('close-details-btn').addEventListener('click', () => {
+        detailsModal.remove();
+    });
+
+    document.getElementById('mark-complete-details-btn').addEventListener('click', () => {
         markTransactionComplete(transaction.id);
+        detailsModal.remove();
     });
 
-    notificationList.appendChild(notificationItem);
-}
-
-// Function to dismiss a notification
-function dismissNotification(transactionId) {
-    console.log('Dismissing notification:', transactionId);
-
-    // Remove from panel
-    const notificationItem = document.querySelector(`.notification-item[data-id="${transactionId}"]`);
-    if (notificationItem) {
-        notificationItem.remove();
-    }
-
-    // Store in localStorage that this notification was dismissed
-    const dismissedNotifications = JSON.parse(localStorage.getItem('dismissedNotifications') || '{}');
-    dismissedNotifications[transactionId] = new Date().toISOString();
-    localStorage.setItem('dismissedNotifications', JSON.stringify(dismissedNotifications));
-
-    // Update notification badge
-    if (window.approachingDueDates) {
-        window.approachingDueDates = window.approachingDueDates.filter(t => t.id !== transactionId);
-        updateNotificationBadge(window.approachingDueDates.length);
-    }
-
-    // Check if notification list is empty
-    const notificationList = document.getElementById('notification-list');
-    if (notificationList && notificationList.children.length === 0) {
-        const emptyNotification = document.createElement('div');
-        emptyNotification.className = 'empty-notification';
-        emptyNotification.textContent = 'No notifications';
-        notificationList.appendChild(emptyNotification);
-    }
-
-    showMessage('Notification dismissed', 'success');
+    // Close when clicking outside
+    detailsModal.addEventListener('click', (e) => {
+        if (e.target === detailsModal) {
+            detailsModal.remove();
+        }
+    });
 }
 
 // Function to mark a transaction as complete
@@ -2700,9 +2674,6 @@ function markTransactionComplete(transactionId) {
                 status: 'paid',
                 updatedAt: new Date().toISOString()
             }).then(() => {
-                // Remove from panel
-                dismissNotification(transactionId);
-
                 // Update UI
                 const statusBadge = document.querySelector(`.table-row[data-id="${transactionId}"] .status-badge`);
                 if (statusBadge) {
@@ -2736,426 +2707,4 @@ function markTransactionComplete(transactionId) {
         });
 }
 
-// Function to clear all notifications
-function clearAllNotifications() {
-    console.log('Clearing all notifications');
 
-    if (!window.approachingDueDates || window.approachingDueDates.length === 0) {
-        return;
-    }
-
-    // Store all transaction IDs as dismissed
-    const dismissedNotifications = JSON.parse(localStorage.getItem('dismissedNotifications') || '{}');
-
-    window.approachingDueDates.forEach(transaction => {
-        dismissedNotifications[transaction.id] = new Date().toISOString();
-    });
-
-    localStorage.setItem('dismissedNotifications', JSON.stringify(dismissedNotifications));
-
-    // Clear notification list
-    const notificationList = document.getElementById('notification-list');
-    if (notificationList) {
-        notificationList.innerHTML = '';
-
-        const emptyNotification = document.createElement('div');
-        emptyNotification.className = 'empty-notification';
-        emptyNotification.textContent = 'No notifications';
-        notificationList.appendChild(emptyNotification);
-    }
-
-    // Reset badge
-    window.approachingDueDates = [];
-    updateNotificationBadge(0);
-
-    showMessage('All notifications cleared', 'success');
-}
-
-// Function to schedule notifications based on frequency requirements
-function scheduleNotifications(dueTodayTransactions, dueTomorrowTransactions) {
-    console.log('Scheduling notifications');
-
-    // Get current time
-    const now = new Date();
-    const currentHour = now.getHours();
-
-    // Schedule notifications for transactions due today (3 notifications)
-    dueTodayTransactions.forEach(transaction => {
-        console.log(`Scheduling urgent notifications for ${transaction.name}`);
-
-        // First notification immediately with urgent styling
-        sendBrowserNotification(
-            'URGENT: Due Date Today',
-            `${transaction.name}'s transaction ends today!`,
-            {
-                requireInteraction: true, // Keep notification visible until user interacts with it
-                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
-                vibrate: [200, 100, 200, 100, 200], // More intense vibration pattern
-                tag: `transaction-${transaction.id}-urgent`, // Tag to replace previous notifications
-                data: {
-                    transactionId: transaction.id,
-                    urgent: true
-                }
-            }
-        );
-
-        // Determine timing for second notification
-        let secondNotificationHour, secondNotificationMinute;
-
-        if (currentHour < 10) {
-            // If it's morning, schedule for noon
-            secondNotificationHour = 12;
-            secondNotificationMinute = 0;
-        } else if (currentHour < 14) {
-            // If it's around noon, schedule for 2 hours later
-            secondNotificationHour = currentHour + 2;
-            secondNotificationMinute = now.getMinutes();
-        } else {
-            // If it's afternoon, schedule for 3 PM
-            secondNotificationHour = 15;
-            secondNotificationMinute = 0;
-        }
-
-        // Second notification with more urgent message
-        scheduleNotificationAt(secondNotificationHour, secondNotificationMinute,
-            'URGENT: Due Date Today',
-            `${transaction.name}'s transaction ends today! Please take action soon.`,
-            transaction,
-            {
-                requireInteraction: true,
-                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
-                vibrate: [200, 100, 200, 100, 200],
-                tag: `transaction-${transaction.id}-urgent-2`,
-                data: {
-                    transactionId: transaction.id,
-                    urgent: true
-                }
-            }
-        );
-
-        // Third notification in the evening (5 PM) with final reminder
-        scheduleNotificationAt(17, 0,
-            'FINAL REMINDER: Due Date Today',
-            `${transaction.name}'s transaction ends today! This is your final reminder to take action.`,
-            transaction,
-            {
-                requireInteraction: true,
-                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
-                vibrate: [300, 100, 300, 100, 300], // Even more intense vibration
-                tag: `transaction-${transaction.id}-urgent-final`,
-                data: {
-                    transactionId: transaction.id,
-                    urgent: true,
-                    final: true
-                }
-            }
-        );
-    });
-
-    // Schedule notifications for transactions due tomorrow (2 notifications)
-    dueTomorrowTransactions.forEach(transaction => {
-        console.log(`Scheduling warning notifications for ${transaction.name}`);
-
-        // First notification immediately
-        sendBrowserNotification(
-            'Due Date Approaching',
-            `${transaction.name}'s transaction will end tomorrow.`,
-            {
-                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
-                tag: `transaction-${transaction.id}-warning`,
-                data: {
-                    transactionId: transaction.id,
-                    warning: true
-                }
-            }
-        );
-
-        // Second notification in the afternoon (3 PM)
-        scheduleNotificationAt(15, 0,
-            'Reminder: Due Date Tomorrow',
-            `${transaction.name}'s transaction ends tomorrow! Please prepare to take action.`,
-            transaction,
-            {
-                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
-                tag: `transaction-${transaction.id}-warning-2`,
-                data: {
-                    transactionId: transaction.id,
-                    warning: true
-                }
-            }
-        );
-    });
-
-    // Also schedule notifications for transactions due in 2 days (1 notification)
-    const dueDayAfterTomorrowTransactions = window.approachingDueDates?.filter(t => t.daysUntilDue === 2) || [];
-
-    dueDayAfterTomorrowTransactions.forEach(transaction => {
-        console.log(`Scheduling early warning notification for ${transaction.name}`);
-
-        // Just one notification in the morning
-        if (currentHour < 10) {
-            sendBrowserNotification(
-                'Due Date Approaching',
-                `${transaction.name}'s transaction will end in 2 days.`,
-                {
-                    icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
-                    tag: `transaction-${transaction.id}-early-warning`,
-                    data: {
-                        transactionId: transaction.id,
-                        earlyWarning: true
-                    }
-                }
-            );
-        }
-    });
-}
-
-// Function to show due date notifications in the app UI
-function showDueDateNotifications(approachingDueDates) {
-    console.log('Showing due date notifications in UI');
-
-    // Remove any existing notifications
-    const existingNotifications = document.querySelectorAll('.due-date-notification');
-    existingNotifications.forEach(notification => notification.remove());
-
-    // Show notifications for each approaching due date
-    approachingDueDates.forEach((transaction, index) => {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = 'due-date-notification';
-        notification.dataset.transactionId = transaction.id; // Store transaction ID for reference
-        notification.style.top = `${20 + (index * 90)}px`; // Stack notifications
-
-        // Add close button
-        const closeBtn = document.createElement('span');
-        closeBtn.innerHTML = '&times;';
-        closeBtn.className = 'close-btn';
-        closeBtn.addEventListener('click', () => {
-            notification.remove();
-        });
-
-        // Create notification content
-        const content = document.createElement('div');
-
-        // Format the message based on days remaining
-        let messageText = '';
-        if (transaction.daysUntilDue === 0) {
-            messageText = `<span class="customer-name">${transaction.name}</span>'s transaction will end today.`;
-        } else if (transaction.daysUntilDue === 1) {
-            messageText = `<span class="customer-name">${transaction.name}</span>'s transaction will end tomorrow.`;
-        } else {
-            messageText = `<span class="customer-name">${transaction.name}</span>'s transaction will end in ${transaction.daysUntilDue} days.`;
-        }
-
-        content.innerHTML = `
-            <strong>Due Date Approaching!</strong><br>
-            ${messageText}
-        `;
-
-        // Add action buttons
-        const actionButtons = document.createElement('div');
-        actionButtons.className = 'notification-actions';
-        actionButtons.style.marginTop = '10px';
-        actionButtons.style.display = 'flex';
-        actionButtons.style.justifyContent = 'space-between';
-
-        // View transaction button
-        const viewButton = document.createElement('button');
-        viewButton.textContent = 'View Details';
-        viewButton.style.padding = '5px 10px';
-        viewButton.style.backgroundColor = '#1a73e8';
-        viewButton.style.color = 'white';
-        viewButton.style.border = 'none';
-        viewButton.style.borderRadius = '4px';
-        viewButton.style.cursor = 'pointer';
-        viewButton.style.fontSize = '12px';
-        viewButton.addEventListener('click', () => {
-            // Open transaction details (you can implement this functionality)
-            showMessage(`Viewing details for ${transaction.name}'s transaction`, 'info');
-        });
-
-        // Dismiss for today button
-        const dismissButton = document.createElement('button');
-        dismissButton.textContent = 'Dismiss for Today';
-        dismissButton.style.padding = '5px 10px';
-        dismissButton.style.backgroundColor = '#f5f5f5';
-        dismissButton.style.color = '#333';
-        dismissButton.style.border = '1px solid #ddd';
-        dismissButton.style.borderRadius = '4px';
-        dismissButton.style.cursor = 'pointer';
-        dismissButton.style.fontSize = '12px';
-        dismissButton.addEventListener('click', () => {
-            // Store in localStorage that this notification was dismissed for today
-            const dismissedNotifications = JSON.parse(localStorage.getItem('dismissedNotifications') || '{}');
-            dismissedNotifications[transaction.id] = new Date().toISOString();
-            localStorage.setItem('dismissedNotifications', JSON.stringify(dismissedNotifications));
-
-            // Remove the notification
-            notification.remove();
-
-            showMessage(`Dismissed notification for ${transaction.name} for today`, 'info');
-        });
-
-        // Add buttons to action container
-        actionButtons.appendChild(viewButton);
-        actionButtons.appendChild(dismissButton);
-
-        // Add elements to notification
-        notification.appendChild(closeBtn);
-        notification.appendChild(content);
-        notification.appendChild(actionButtons);
-
-        // Add to document
-        document.body.appendChild(notification);
-    });
-}
-
-// Function to send a browser notification
-function sendBrowserNotification(title, message, options = {}) {
-    console.log('Sending browser notification:', title, message);
-
-    // Check if notifications are supported and permission is granted
-    if (!('Notification' in window)) {
-        console.log('This browser does not support notifications');
-        return;
-    }
-
-    if (Notification.permission !== 'granted') {
-        console.log('Notification permission not granted');
-        return;
-    }
-
-    // Default notification options
-    const defaultOptions = {
-        body: message,
-        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
-        badge: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
-        vibrate: [200, 100, 200],
-        requireInteraction: false
-    };
-
-    // Merge default options with provided options
-    const notificationOptions = { ...defaultOptions, ...options };
-
-    // Create and show the notification
-    try {
-        const notification = new Notification(title, notificationOptions);
-
-        // Add click handler
-        notification.onclick = function() {
-            console.log('Notification clicked');
-            window.focus();
-            notification.close();
-        };
-
-        return notification;
-    } catch (error) {
-        console.error('Error creating notification:', error);
-    }
-}
-
-// Function to schedule a notification at a specific time
-function scheduleNotificationAt(hour, minute, title, message, transaction, options = {}) {
-    console.log(`Scheduling notification for ${hour}:${minute}: ${title}`);
-
-    // Get current time
-    const now = new Date();
-
-    // Create target time for today
-    const targetTime = new Date();
-    targetTime.setHours(hour, minute, 0, 0);
-
-    // If the target time has already passed today, don't schedule
-    if (targetTime <= now) {
-        console.log('Target time has already passed today, not scheduling');
-        return;
-    }
-
-    // Calculate milliseconds until target time
-    const timeUntilNotification = targetTime.getTime() - now.getTime();
-
-    console.log(`Notification will be sent in ${timeUntilNotification / 1000 / 60} minutes`);
-
-    // Store the scheduled notification in a global array for tracking
-    // @ts-ignore
-    if (!window.scheduledNotifications) {
-        // @ts-ignore
-        window.scheduledNotifications = [];
-    }
-
-    // Create a unique ID for this scheduled notification
-    const notificationId = `${transaction.id}-${Date.now()}`;
-
-    // Schedule the notification
-    const timeoutId = setTimeout(() => {
-        // Check if the transaction is still relevant (not marked as paid, etc.)
-        rentalCollection.doc(transaction.id).get()
-            .then(doc => {
-                if (doc.exists) {
-                    const updatedTransaction = doc.data();
-
-                    // Only send notification if transaction is still pending
-                    if (updatedTransaction.status === 'pending') {
-                        // Check if the notification has been dismissed
-                        const dismissedNotifications = JSON.parse(localStorage.getItem('dismissedNotifications') || '{}');
-                        const isDismissed = dismissedNotifications[transaction.id] &&
-                                          new Date(dismissedNotifications[transaction.id]) > new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-                        if (!isDismissed) {
-                            // Merge with any provided options
-                            const notificationOptions = {
-                                ...options,
-                                data: {
-                                    ...(options.data || {}),
-                                    transactionId: transaction.id,
-                                    scheduledNotificationId: notificationId
-                                }
-                            };
-
-                            // Send the notification
-                            sendBrowserNotification(title, message, notificationOptions);
-
-                            // Also update the notification panel if it's open
-                            if (document.getElementById('notification-panel')?.classList.contains('show')) {
-                                updateNotificationPanel();
-                            }
-
-                            // Update the notification badge
-                            if (window.approachingDueDates && window.approachingDueDates.length > 0) {
-                                updateNotificationBadge(window.approachingDueDates.length);
-                            }
-                        } else {
-                            console.log('Notification dismissed by user, not sending');
-                        }
-                    } else {
-                        console.log('Transaction status changed, not sending notification');
-                    }
-                }
-
-                // Remove from scheduled notifications
-                // @ts-ignore
-                window.scheduledNotifications = window.scheduledNotifications.filter(n => n.id !== notificationId);
-            })
-            .catch(error => {
-                console.error('Error checking transaction before sending notification:', error);
-
-                // Remove from scheduled notifications even on error
-                // @ts-ignore
-                window.scheduledNotifications = window.scheduledNotifications.filter(n => n.id !== notificationId);
-            });
-    }, timeUntilNotification);
-
-    // Store the scheduled notification for potential cancellation
-    // @ts-ignore
-    window.scheduledNotifications.push({
-        id: notificationId,
-        transactionId: transaction.id,
-        timeoutId: timeoutId,
-        scheduledTime: targetTime.toISOString(),
-        title: title,
-        message: message
-    });
-
-    // Return the timeout ID in case we need to cancel it later
-    return timeoutId;
-}
