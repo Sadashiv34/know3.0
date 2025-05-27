@@ -53,6 +53,7 @@ const todayRevenueDisplay = document.getElementById('today-revenue');
 const historyModal = document.getElementById('history-modal');
 const closeHistoryModal = document.getElementById('close-history-modal');
 const historyBody = document.getElementById('history-body');
+const monthlySummaryBody = document.getElementById('monthly-summary-body');
 const historyMonthSelect = document.getElementById('history-month');
 const historyYearSelect = document.getElementById('history-year');
 
@@ -1781,55 +1782,188 @@ function formatDuration(durationStr, timeMode) {
 function loadHistoryData() {
     // Clear existing rows
     historyBody.innerHTML = '';
+    monthlySummaryBody.innerHTML = '';
 
-    // Show loading indicator
+    // Show loading indicators
     const loadingRow = document.createElement('div');
     loadingRow.className = 'history-row empty';
-    loadingRow.innerHTML = '<div class="history-column" style="text-align: center; flex: 1;">Loading history data...</div>';
+    loadingRow.innerHTML = '<div class="history-column" style="text-align: center; flex: 1;">Loading daily data...</div>';
     historyBody.appendChild(loadingRow);
 
-    // Get selected month and year
-    const selectedMonth = parseInt(historyMonthSelect.value);
+    const monthlyLoadingRow = document.createElement('div');
+    monthlyLoadingRow.className = 'monthly-summary-row empty';
+    monthlyLoadingRow.innerHTML = '<div class="monthly-column" style="text-align: center; flex: 1;">Loading monthly summaries...</div>';
+    monthlySummaryBody.appendChild(monthlyLoadingRow);
+
+    // Get selected year
     const selectedYear = parseInt(historyYearSelect.value);
 
-    // Calculate start and end dates for the selected month
-    const startDate = new Date(selectedYear, selectedMonth, 1);
-    const endDate = new Date(selectedYear, selectedMonth + 1, 0); // Last day of the month
+    // Load both monthly summaries and daily data
+    Promise.all([
+        loadMonthlySummaries(selectedYear),
+        loadDailyData(selectedYear)
+    ]).then(() => {
+        console.log('Both monthly and daily data loaded successfully');
+    }).catch(error => {
+        console.error('Error loading history data:', error);
+        showMessage('Error loading history data', 'error');
+    });
+}
 
-    // Query revenue history for the selected month
-    revenueHistoryCollection
-        .where('userId', '==', currentUser.id)
-        .where('date', '>=', formatDate(startDate))
-        .where('date', '<=', formatDate(endDate))
-        .orderBy('date', 'desc')
-        .get()
-        .then(snapshot => {
-            // Remove loading indicator
-            historyBody.innerHTML = '';
+// Function to load monthly summaries for a year
+function loadMonthlySummaries(year) {
+    return new Promise((resolve, reject) => {
+        // Calculate start and end dates for the year
+        const startDate = new Date(year, 0, 1);
+        const endDate = new Date(year, 11, 31);
 
-            if (snapshot.empty) {
-                // Show empty state
-                const emptyRow = document.createElement('div');
-                emptyRow.className = 'history-row empty';
-                emptyRow.innerHTML = '<div class="history-column" style="text-align: center; flex: 1;">No history data found for this month.</div>';
-                historyBody.appendChild(emptyRow);
-                return;
-            }
+        // Query all revenue history for the year
+        revenueHistoryCollection
+            .where('userId', '==', currentUser.id)
+            .where('date', '>=', formatDate(startDate))
+            .where('date', '<=', formatDate(endDate))
+            .get()
+            .then(snapshot => {
+                // Clear monthly summary loading indicator
+                monthlySummaryBody.innerHTML = '';
 
-            // Add history rows to UI
-            snapshot.forEach(doc => {
-                const historyData = doc.data();
-                addHistoryRowToUI(historyData);
+                if (snapshot.empty) {
+                    const emptyRow = document.createElement('div');
+                    emptyRow.className = 'monthly-summary-row empty';
+                    emptyRow.innerHTML = '<div class="monthly-column" style="text-align: center; flex: 1;">No monthly data found for this year.</div>';
+                    monthlySummaryBody.appendChild(emptyRow);
+                    resolve();
+                    return;
+                }
+
+                // Group data by month
+                const monthlyData = {};
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const date = new Date(data.date);
+                    const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+
+                    if (!monthlyData[monthKey]) {
+                        monthlyData[monthKey] = {
+                            year: date.getFullYear(),
+                            month: date.getMonth(),
+                            totalRevenue: 0,
+                            totalCustomers: 0,
+                            daysWithData: 0,
+                            customerSet: new Set()
+                        };
+                    }
+
+                    monthlyData[monthKey].totalRevenue += data.revenue;
+                    monthlyData[monthKey].totalCustomers += data.customerCount;
+                    monthlyData[monthKey].daysWithData++;
+                });
+
+                // Sort months and add to UI
+                const sortedMonths = Object.keys(monthlyData).sort((a, b) => {
+                    const [yearA, monthA] = a.split('-').map(Number);
+                    const [yearB, monthB] = b.split('-').map(Number);
+                    return yearB - yearA || monthB - monthA; // Sort by year desc, then month desc
+                });
+
+                sortedMonths.forEach(monthKey => {
+                    const data = monthlyData[monthKey];
+                    addMonthlySummaryRowToUI(data);
+                });
+
+                resolve();
+            })
+            .catch(error => {
+                console.error('Error loading monthly summaries:', error);
+                monthlySummaryBody.innerHTML = '';
+                const errorRow = document.createElement('div');
+                errorRow.className = 'monthly-summary-row empty';
+                errorRow.innerHTML = '<div class="monthly-column" style="text-align: center; flex: 1; color: #d32f2f;">Error loading monthly data.</div>';
+                monthlySummaryBody.appendChild(errorRow);
+                reject(error);
             });
-        })
-        .catch(error => {
-            console.error('Error loading history data:', error);
-            historyBody.innerHTML = '';
-            const errorRow = document.createElement('div');
-            errorRow.className = 'history-row empty';
-            errorRow.innerHTML = '<div class="history-column" style="text-align: center; flex: 1; color: #d32f2f;">Error loading history data. Please try again.</div>';
-            historyBody.appendChild(errorRow);
-        });
+    });
+}
+
+// Function to load daily data for selected month
+function loadDailyData(year) {
+    return new Promise((resolve, reject) => {
+        // Get selected month
+        const selectedMonth = parseInt(historyMonthSelect.value);
+
+        // Calculate start and end dates for the selected month
+        const startDate = new Date(year, selectedMonth, 1);
+        const endDate = new Date(year, selectedMonth + 1, 0);
+
+        // Query revenue history for the selected month
+        revenueHistoryCollection
+            .where('userId', '==', currentUser.id)
+            .where('date', '>=', formatDate(startDate))
+            .where('date', '<=', formatDate(endDate))
+            .orderBy('date', 'desc')
+            .get()
+            .then(snapshot => {
+                // Remove daily loading indicator
+                historyBody.innerHTML = '';
+
+                if (snapshot.empty) {
+                    const emptyRow = document.createElement('div');
+                    emptyRow.className = 'history-row empty';
+                    emptyRow.innerHTML = '<div class="history-column" style="text-align: center; flex: 1;">No daily data found for this month.</div>';
+                    historyBody.appendChild(emptyRow);
+                    resolve();
+                    return;
+                }
+
+                // Add history rows to UI
+                snapshot.forEach(doc => {
+                    const historyData = doc.data();
+                    addHistoryRowToUI(historyData);
+                });
+
+                resolve();
+            })
+            .catch(error => {
+                console.error('Error loading daily data:', error);
+                historyBody.innerHTML = '';
+                const errorRow = document.createElement('div');
+                errorRow.className = 'history-row empty';
+                errorRow.innerHTML = '<div class="history-column" style="text-align: center; flex: 1; color: #d32f2f;">Error loading daily data.</div>';
+                historyBody.appendChild(errorRow);
+                reject(error);
+            });
+    });
+}
+
+// Function to add a monthly summary row to the UI
+function addMonthlySummaryRowToUI(monthlyData) {
+    const row = document.createElement('div');
+    row.className = 'monthly-summary-row';
+
+    // Check if this is the current month
+    const currentDate = new Date();
+    const isCurrentMonth = monthlyData.year === currentDate.getFullYear() &&
+                           monthlyData.month === currentDate.getMonth();
+
+    if (isCurrentMonth) {
+        row.classList.add('current-month');
+    }
+
+    // Format month name
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = `${monthNames[monthlyData.month]} ${monthlyData.year}`;
+
+    row.innerHTML = `
+        <div class="monthly-column month">${monthName}</div>
+        <div class="monthly-column total-days">${monthlyData.daysWithData}</div>
+        <div class="monthly-column total-customers">${monthlyData.totalCustomers}</div>
+        <div class="monthly-column total-revenue">₹ ${monthlyData.totalRevenue.toFixed(2)}</div>
+    `;
+
+    // Add to monthly summary table
+    monthlySummaryBody.appendChild(row);
 }
 
 // Function to add a history row to the UI

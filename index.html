@@ -6,15 +6,6 @@
     <title>Transaction History</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-14T1MRCBR3"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-14T1MRCBR3');
-</script>
 </head>
 <body>
     <div class="container">
@@ -163,14 +154,35 @@
                             </select>
                         </div>
                     </div>
-                    <div class="history-table">
-                        <div class="history-header">
-                            <div class="history-column date">Date</div>
-                            <div class="history-column customers">Customers</div>
-                            <div class="history-column revenue">Revenue</div>
+
+                    <!-- Monthly Revenue Summary Section -->
+                    <div class="monthly-summary-section">
+                        <h3 class="section-title">Monthly Revenue Summary</h3>
+                        <div class="monthly-summary-table">
+                            <div class="monthly-summary-header">
+                                <div class="monthly-column month">Month</div>
+                                <div class="monthly-column total-days">Days</div>
+                                <div class="monthly-column total-customers">Customers</div>
+                                <div class="monthly-column total-revenue">Total Revenue</div>
+                            </div>
+                            <div class="monthly-summary-body" id="monthly-summary-body">
+                                <!-- Monthly summary rows will be added dynamically -->
+                            </div>
                         </div>
-                        <div class="history-body" id="history-body">
-                            <!-- History rows will be added dynamically -->
+                    </div>
+
+                    <!-- Daily History Section -->
+                    <div class="daily-history-section">
+                        <h3 class="section-title">Daily Breakdown</h3>
+                        <div class="history-table">
+                            <div class="history-header">
+                                <div class="history-column date">Date</div>
+                                <div class="history-column customers">Customers</div>
+                                <div class="history-column revenue">Revenue</div>
+                            </div>
+                            <div class="history-body" id="history-body">
+                                <!-- History rows will be added dynamically -->
+                            </div>
                         </div>
                     </div>
                 </div>
